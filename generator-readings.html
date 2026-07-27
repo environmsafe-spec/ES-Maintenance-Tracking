@@ -370,6 +370,8 @@ const I18N = {
     corr_delete:'حذف', corr_del_confirm:'حذف هذا السجل نهائيًا؟',
     corr_filter_all:'الكل', corr_filter_open:'المفتوحة', corr_edit_status:'تغيير الحالة',
     corr_open_count:'{n} عطل مفتوح',
+    corr_edit:'✎ تعديل', corr_edit_title:'تعديل السجل', corr_update:'حفظ التعديلات', corr_updated:'✅ تم تحديث السجل',
+    corr_cancel:'إلغاء',
     rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
     rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
     rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
@@ -480,6 +482,8 @@ const I18N = {
     corr_delete:'Delete', corr_del_confirm:'Delete this record permanently?',
     corr_filter_all:'All', corr_filter_open:'Open only', corr_edit_status:'Change status',
     corr_open_count:'{n} open fault(s)',
+    corr_edit:'✎ Edit', corr_edit_title:'Edit record', corr_update:'Save changes', corr_updated:'✅ Record updated',
+    corr_cancel:'Cancel',
     rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
     rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
     rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
@@ -616,6 +620,7 @@ let STATE = {
   svclog: [],
   corrGenId: null,
   corrFilter: 'all',
+  corrEditingId: null,
   maintGenId: null,
   lang: 'ar',
   activeTab: 'new',
@@ -2425,6 +2430,43 @@ function openFaultCount(){
   return STATE.corrective.filter(c => c.status && c.status!=='closed').length;
 }
 
+function renderCorrEditForm(c){
+  const genOptions = STATE.generators.map(g=>`<option value="${g.id}"${g.id===c.genId?' selected':''}>${g.name}</option>`).join('');
+  const typeOptions = CORR_TYPES.map(v=>`<option value="${v}"${v===(c.type||'other')?' selected':''}>${corrTypeLabel(v)}</option>`).join('');
+  const sevOptions = CORR_SEVERITY.map(v=>`<option value="${v}"${v===(c.severity||'low')?' selected':''}>${corrSevLabel(v)}</option>`).join('');
+  const statusOptions = CORR_STATUS.map(v=>`<option value="${v}"${v===(c.status||'open')?' selected':''}>${corrStatusLabel(v)}</option>`).join('');
+  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  return `<div class="corr-card ${sevClass(c.severity)}">
+    <h3 style="margin-top:0;">${t('corr_edit_title')}</h3>
+    <label>${t('corr_gen')}</label>
+    <select id="ce-gen">${genOptions}</select>
+    <div class="grid2">
+      <div><label>${t('corr_date')}</label><input type="date" id="ce-date" value="${esc(c.date)}"></div>
+      <div><label>${t('corr_hours')}</label><input type="number" step="0.1" id="ce-hours" value="${esc(c.hoursAtEvent)}" placeholder="—"></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('corr_type')}</label><select id="ce-type">${typeOptions}</select></div>
+      <div><label>${t('corr_sev')}</label><select id="ce-sev">${sevOptions}</select></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('corr_status')}</label><select id="ce-status">${statusOptions}</select></div>
+      <div><label>${t('corr_downtime')}</label><input type="number" step="0.1" id="ce-downtime" value="${esc(c.downtimeHrs)}" placeholder="—"></div>
+    </div>
+    <label>${t('corr_desc')}</label>
+    <textarea id="ce-desc" rows="3" placeholder="—">${esc(c.description)}</textarea>
+    <label>${t('corr_action')}</label>
+    <textarea id="ce-action" rows="2" placeholder="—">${esc(c.actionTaken)}</textarea>
+    <label>${t('corr_parts')}</label>
+    <input type="text" id="ce-parts" value="${esc(c.partsUsed)}" placeholder="—">
+    <label>${t('corr_by')}</label>
+    <input type="text" id="ce-by" value="${esc(c.by)}" placeholder="—">
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary" data-correditsave="${c.id}">${t('corr_update')}</button>
+      <button class="btn btn-outline" data-correditcancel="${c.id}">${t('corr_cancel')}</button>
+    </div>
+  </div>`;
+}
+
 function renderCorrective(){
   if(!STATE.generators.length){
     return `<div class="empty"><div class="em-ic">⚠️</div>${t('no_gens')}</div>`;
@@ -2453,6 +2495,7 @@ function renderCorrective(){
   if(STATE.corrFilter==='open') list = list.filter(c=>c.status && c.status!=='closed');
 
   const rows = list.length ? list.map(c=>{
+    if(c.id === STATE.corrEditingId) return renderCorrEditForm(c);
     const g = genById(c.genId);
     const dstr = c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '—';
     const statusPill = `<span class="pill pill-${c.status||'open'}">${corrStatusLabel(c.status||'open')}</span>`;
@@ -2470,6 +2513,7 @@ function renderCorrective(){
       ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
+        <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
         <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>
       </div>
     </div>`;
@@ -2580,6 +2624,64 @@ function bindCorrective(){
         await db.collection(CORR_COLLECTION).doc(btn.dataset.corrdel).delete();
         showToast(t('corr_saved'));
       }catch(e){ console.warn(e); showToast(t('corr_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-corredit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      STATE.corrEditingId = btn.dataset.corredit;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-correditcancel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      STATE.corrEditingId = null;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-correditsave]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.correditsave;
+      const genId = (document.getElementById('ce-gen')||{}).value;
+      const desc = ((document.getElementById('ce-desc')||{}).value||'').trim();
+      if(!genId){ showToast(t('corr_need_gen')); return; }
+      if(!desc){ showToast(t('corr_need_desc')); return; }
+      const val = eid => { const e=document.getElementById(eid); return e? String(e.value||'').trim() : ''; };
+      const num = eid => { const v=val(eid); return v===''? null : parseFloat(v); };
+      const by = val('ce-by');
+      if(by){ try{ localStorage.setItem(TECH_LOCAL_KEY, by); }catch(e){} }
+      const patch = {
+        genId,
+        date: val('ce-date'),
+        type: val('ce-type') || 'other',
+        severity: val('ce-sev') || 'low',
+        status: val('ce-status') || 'open',
+        hoursAtEvent: num('ce-hours'),
+        description: desc,
+        actionTaken: val('ce-action'),
+        partsUsed: val('ce-parts'),
+        downtimeHrs: num('ce-downtime'),
+        by
+      };
+      if(patch.status==='closed'){
+        const existing = STATE.corrective.find(x=>x.id===id);
+        if(!existing || existing.status!=='closed'){
+          const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+          patch.closedDate = today.toISOString().slice(0,10);
+        }
+      }
+      btn.disabled = true;
+      try{
+        await db.collection(CORR_COLLECTION).doc(id).update(patch);
+        showToast(t('corr_updated'));
+        STATE.corrEditingId = null;
+        render();
+      }catch(e){
+        console.warn('corrective update failed', e);
+        showToast(t('corr_fail'));
+      }finally{ btn.disabled = false; }
     });
   });
 }

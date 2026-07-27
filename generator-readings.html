@@ -1,0 +1,2700 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1B2A4A">
+<title>EnvironmSafe · Generator Readings</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy:#1B2A4A;
+    --navy-light:#2C4066;
+    --gold:#C49A2A;
+    --gold-light:#E0BB55;
+    --bg:#F5F6F8;
+    --card:#FFFFFF;
+    --ok:#2E7D46;
+    --warn:#B8860B;
+    --bad:#C0392B;
+    --text:#1E2430;
+    --muted:#6B7280;
+    --border:#E4E7EC;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:74px;
+    min-height:100vh;
+  }
+  header.top{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);
+    color:#fff;
+    padding:16px 18px 14px;
+    position:sticky;top:0;z-index:20;
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+  }
+  header.top .brand{display:flex;align-items:center;gap:10px;}
+  header.top .brand .logowrap{
+    width:52px;height:40px;border-radius:9px;background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;overflow:hidden;padding:3px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.2);
+  }
+  header.top .brand .logowrap img{width:100%;height:100%;object-fit:contain;}
+  header.top .brand .name{font-size:15px;font-weight:700;letter-spacing:.2px;}
+  header.top .brand .sub{font-size:11px;color:#C9D3E4;font-weight:500;}
+  header.top .pagetitle{margin-top:10px;font-size:20px;font-weight:700;}
+  header.top .pagesub{font-size:12.5px;color:#C9D3E4;margin-top:2px;}
+
+  main{padding:14px 14px 20px;max-width:640px;margin:0 auto;}
+
+  .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:14px;padding:16px;margin-bottom:12px;
+  }
+  .card h3{margin:0 0 12px;font-size:14px;letter-spacing:.3px;color:var(--navy);text-transform:uppercase;font-weight:700;}
+
+  label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin:10px 0 4px;}
+  label.req::after{content:" *";color:var(--bad);}
+  select,input[type=text],input[type=number],input[type=datetime-local],input[type=date],textarea{
+    width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:10px;
+    font-size:15.5px;background:#FAFBFC;color:var(--text);font-family:inherit;
+  }
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);background:#fff;}
+  textarea{resize:vertical;min-height:60px;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px;}
+  .unit{font-size:11px;color:var(--muted);font-weight:500;}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    border:none;border-radius:11px;padding:13px 18px;font-size:15px;font-weight:700;
+    cursor:pointer;width:100%;margin-top:14px;
+  }
+  .btn-primary{background:var(--gold);color:var(--navy);}
+  .btn-primary:active{background:var(--gold-light);}
+  .btn-secondary{background:var(--navy);color:#fff;}
+  .btn-outline{background:transparent;color:var(--navy);border:1.5px solid var(--navy);}
+  .btn-danger{background:transparent;color:var(--bad);border:1.5px solid var(--bad);}
+  .btn-sm{padding:11px 16px;font-size:13.5px;width:auto;margin-top:0;min-height:40px;}
+
+  .toast{
+    position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--navy);color:#fff;padding:12px 20px;border-radius:30px;font-size:14px;
+    font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;
+    transition:all .25s ease;z-index:100;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  nav.tabbar{
+    position:fixed;bottom:0;left:0;right:0;background:#fff;
+    border-top:1px solid var(--border);display:flex;z-index:20;
+    box-shadow:0 -2px 10px rgba(0,0,0,0.06);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  nav.tabbar button{
+    flex:1;min-width:0;background:none;border:none;padding:8px 1px 7px;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    color:var(--muted);font-size:9.5px;font-weight:600;cursor:pointer;
+  }
+  nav.tabbar button span:not(.ic){
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  nav.tabbar button .ic{font-size:17px;line-height:1;}
+  nav.tabbar button.active{color:var(--navy);}
+  nav.tabbar button.active .ic{color:var(--gold);}
+
+  .badge{
+    display:inline-block;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;
+    letter-spacing:.3px;text-transform:uppercase;
+  }
+  .badge-unhcr{background:#E7EEFB;color:#2255A4;}
+  .badge-fao{background:#E9F6EC;color:#2E7D46;}
+
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;flex-shrink:0;}
+  .dot-ok{background:var(--ok);}
+  .dot-warn{background:var(--warn);}
+  .dot-bad{background:var(--bad);}
+
+  .rowbetween{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .genpicker{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:4px;}
+  .genpicker::-webkit-scrollbar{display:none;}
+  .genchip{
+    flex-shrink:0;padding:12px 16px;border-radius:22px;border:1.5px solid var(--border);
+    background:#fff;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;
+    min-height:40px;display:flex;align-items:center;
+  }
+  .genchip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+  .hcard{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#FCFCFD;}
+  .hcard .htop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .hcard .htime{font-size:12px;color:var(--muted);font-weight:600;}
+  .hcard .hgen{font-size:14.5px;font-weight:700;color:var(--navy);}
+  .hcard .hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;font-size:12.5px;margin-top:4px;}
+  .hcard .hgrid div span{display:block;color:var(--muted);font-size:10.5px;}
+  .hcard details summary{font-size:12.5px;color:var(--navy);font-weight:600;cursor:pointer;margin-top:6px;list-style:none;}
+  .hcard details summary::-webkit-details-marker{display:none;}
+  .hcard .full{margin-top:8px;font-size:12.5px;line-height:1.7;color:var(--text);}
+  .hcard .notes{margin-top:6px;font-size:12.5px;color:var(--muted);font-style:italic;}
+
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat{background:#FCFCFD;border:1px solid var(--border);border-radius:12px;padding:12px;}
+  .stat .v{font-size:20px;font-weight:800;color:var(--navy);}
+  .stat .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+
+  .empty{text-align:center;padding:40px 20px;color:var(--muted);}
+  .empty .em-ic{font-size:38px;margin-bottom:10px;}
+
+  .chartwrap{position:relative;height:180px;margin-top:6px;}
+
+  input[type=text].inline-edit{padding:8px 10px;font-size:14px;}
+  .genrow{padding:12px 0;border-bottom:1px solid var(--border);}
+  .genrow:last-child{border-bottom:none;}
+  .genrow-top{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+  .genrow .gname{flex:1;font-weight:700;font-size:15px;min-width:0;overflow-wrap:break-word;}
+  .genrow .gcount{font-size:11.5px;color:var(--muted);white-space:nowrap;}
+  .genrow-actions{display:flex;gap:8px;}
+  .genrow-actions .btn{flex:1;}
+
+  .flagline{font-size:12px;color:var(--bad);font-weight:600;margin-top:4px;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:-6px;margin-bottom:8px;}
+  .section-sep{border:none;border-top:1px solid var(--border);margin:16px 0;}
+  a.linklike{color:var(--navy);font-weight:700;text-decoration:underline;font-size:13px;}
+
+  .rp-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;}
+  .rp-table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;}
+  .rp-table th{background:var(--navy);color:#fff;font-weight:700;padding:8px 10px;text-align:left;position:sticky;top:0;}
+  .rp-table td{padding:7px 10px;border-top:1px solid var(--border);color:var(--text);}
+  .rp-table tbody tr:nth-child(even){background:#FAFBFC;}
+  .rp-table .rp-when{font-weight:600;color:var(--navy);}
+  .rp-table td.rp-bad{background:#FDECEA;color:var(--bad);font-weight:800;}
+  .corr-card{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:13px 15px;margin-bottom:10px;border-inline-start-width:5px;border-inline-start-style:solid;
+  }
+  .corr-card.sev-low{border-inline-start-color:#9AA3B2;}
+  .corr-card.sev-medium{border-inline-start-color:var(--gold);}
+  .corr-card.sev-high{border-inline-start-color:#E67E22;}
+  .corr-card.sev-critical{border-inline-start-color:var(--bad);}
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;white-space:nowrap;}
+  .pill-open{background:#FDECEA;color:#C0392B;}
+  .pill-in_progress{background:#FEF5E0;color:#8A6D1F;}
+  .pill-closed{background:#E7F6EC;color:#1E7A43;}
+  .maint-table td{white-space:normal;vertical-align:middle;font-size:12px;padding:9px 10px;}
+  .maint-table th{font-size:11px;}
+  .maint-table .btn-sm{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap;}
+
+  /* Language toggle */
+  .langtoggle{position:absolute;top:14px;right:14px;display:flex;gap:0;border:1.5px solid rgba(255,255,255,0.5);border-radius:20px;overflow:hidden;}
+  .langtoggle button{background:transparent;color:#fff;border:none;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;}
+  .langtoggle button.active{background:var(--gold);color:var(--navy);}
+
+  /* RTL support for Arabic */
+  html[dir="rtl"] .langtoggle{right:auto;left:14px;}
+  html[dir="rtl"] label.req::after{content:" *";}
+  html[dir="rtl"] .unit{direction:ltr;display:inline-block;}
+  html[dir="rtl"] .rp-table th{text-align:right;}
+  html[dir="rtl"] .rp-when{direction:rtl;}
+  html[dir="rtl"] .hgrid, html[dir="rtl"] .statgrid{direction:rtl;}
+  html[dir="rtl"] .btn .unit, html[dir="rtl"] input, html[dir="rtl"] select{text-align:right;}
+  html[dir="rtl"] input[type=number], html[dir="rtl"] input[type=date], html[dir="rtl"] input[type=datetime-local]{direction:ltr;text-align:right;}
+  html[dir="rtl"] .brand{direction:rtl;}
+  html[dir="rtl"] .pagetitle, html[dir="rtl"] .pagesub{direction:rtl;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="langtoggle">
+    <button data-lang="ar" id="langAr">ع</button>
+    <button data-lang="en" id="langEn">EN</button>
+  </div>
+  <div class="brand">
+    <div class="logowrap"><img src="data:image/png;base64,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" alt="EnvironmSafe logo"></div>
+    <div>
+      <div class="name">EnvironmSafe</div>
+      <div class="sub">Engineering, Trading &amp; Services Ltd.</div>
+    </div>
+  </div>
+  <div class="pagetitle" id="pageTitle">New Reading</div>
+  <div class="pagesub" id="pageSub">Log today's generator readings</div>
+</header>
+
+<main id="app"></main>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="new"><span class="ic">📝</span><span data-tabkey="tab_new">New</span></button>
+  <button class="tab-btn" data-tab="history"><span class="ic">🕓</span><span data-tabkey="tab_history">History</span></button>
+  <button class="tab-btn" data-tab="reports"><span class="ic">📄</span><span data-tabkey="tab_reports">Reports</span></button>
+  <button class="tab-btn" data-tab="maintenance"><span class="ic">🛠️</span><span data-tabkey="tab_maint">Service</span></button>
+  <button class="tab-btn" data-tab="corrective"><span class="ic">⚠️</span><span data-tabkey="tab_corr">Faults</span></button>
+  <button class="tab-btn" data-tab="dashboard"><span class="ic">📊</span><span data-tabkey="tab_dashboard">Dashboard</span></button>
+  <button class="tab-btn" data-tab="generators"><span class="ic">⚙️</span><span data-tabkey="tab_setup">Setup</span></button>
+</nav>
+
+<script>
+/* ---------------- Firebase: shared cloud storage, live-synced across every technician's phone ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyD5xqWAVrgRsECjdfkCImfUOM-Gsk3s5tw",
+  authDomain: "generators-readings.firebaseapp.com",
+  projectId: "generators-readings",
+  storageBucket: "generators-readings.firebasestorage.app",
+  messagingSenderId: "785392553616",
+  appId: "1:785392553616:web:fcd74a684ef5e837d49215",
+  measurementId: "G-ZVZGNGKQ4V"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Cache reads/writes locally so the app keeps working with patchy connectivity
+// in the field — changes sync automatically once back online.
+db.enablePersistence({ synchronizeTabs: true }).catch(err=>{
+  console.warn('Offline persistence unavailable:', err.code);
+});
+
+let unsubGenerators = null;
+let unsubReadings = null;
+let unsubMaint = null;
+let unsubCorr = null;
+let unsubSvc = null;
+
+function authReady(){
+  return new Promise((resolve, reject)=>{
+    auth.onAuthStateChanged(user=>{
+      if(user){ resolve(user); return; }
+      auth.signInAnonymously().catch(reject);
+    }, reject);
+  });
+}
+
+const GENERATORS_COLLECTION = 'generators';
+const READINGS_COLLECTION = 'readings';
+const MAINT_COLLECTION = 'maintenance'; // one doc per generator: baselines + last-done records
+const CORR_COLLECTION = 'corrective';   // one doc per corrective-maintenance / failure event
+const SVCLOG_COLLECTION = 'servicelog'; // permanent dated record of every service performed
+
+// Corrective maintenance event types & severities (value keys are stable; labels are translated)
+const CORR_TYPES = ['failure','breakdown','repair','replacement','adjustment','other'];
+const CORR_SEVERITY = ['low','medium','high','critical'];
+const CORR_STATUS = ['open','in_progress','closed'];
+const TECH_LOCAL_KEY = 'es-genreadings-lasttech'; // small per-device convenience only, not shared data
+
+// Time-based maintenance intervals (calendar days)
+const TIME_INTERVALS = [
+  { key:'weekly',    days:7,   labelEn:'Weekly',      labelAr:'أسبوعي' },
+  { key:'q3',        days:90,  labelEn:'3-Monthly',   labelAr:'كل 3 أشهر' },
+  { key:'q6',        days:180, labelEn:'6-Monthly',   labelAr:'كل 6 أشهر' },
+  { key:'yearly',    days:365, labelEn:'Yearly',      labelAr:'سنوي' },
+];
+// Hours-based maintenance intervals (engine running hours)
+const HOUR_INTERVALS = [125, 250, 500, 1000, 4000, 8000, 12000];
+// Nesting: logging a larger service also covers (resets) all smaller intervals.
+// e.g. doing the 500 hr service also does the 250 and 125.
+function smallerHourIntervals(hi){
+  return HOUR_INTERVALS.filter(x => x < hi);
+}
+
+// "Due soon" thresholds
+const TIME_SOON_DAYS = 3;   // amber if next-due within this many days
+const HOUR_SOON_HRS  = 25;  // amber if within this many running-hours
+
+function latestHoursFor(genId){
+  const rs = STATE.readings
+    .filter(r=>r.genId===genId && r.hours!==undefined && r.hours!==null && r.hours!=='')
+    .sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp));
+  return rs.length ? parseFloat(rs[0].hours) : null;
+}
+function maintDocFor(genId){
+  return STATE.maintenance.find(m=>m.id===genId) || null;
+}
+function addDays(dateStr, days){
+  const d = new Date(dateStr); d.setDate(d.getDate()+days); return d;
+}
+function daysBetween(a, b){ return Math.round((b - a) / 86400000); }
+
+const DEFAULT_GENERATORS = [
+  {id:'unhcr-1', name:'UNHCR Genset 1', client:'UNHCR'},
+  {id:'unhcr-2', name:'UNHCR Genset 2', client:'UNHCR'},
+  {id:'unhcr-3', name:'UNHCR Genset 3', client:'UNHCR'},
+  {id:'unhcr-4', name:'UNHCR Genset 4', client:'UNHCR'},
+  {id:'unhcr-5', name:'UNHCR Genset 5', client:'UNHCR'},
+  {id:'fao-1', name:'FAO Genset 1', client:'FAO'},
+  {id:'fao-2', name:'FAO Genset 2', client:'FAO'},
+  {id:'fao-3', name:'FAO Genset 3', client:'FAO'},
+];
+
+// Normal-range thresholds used to flag out-of-range readings
+const RANGES = {
+  vL1:[360,420], vL2:[360,420], vL3:[360,420],
+  freq:[49,51],
+  oilP:[2,7],
+  coolantT:[null,98],
+  oilT:[null,110],
+  battV:[23,29],
+  fuel:[15,null],
+};
+
+/* ---------------- Internationalization (Arabic default, English secondary) ---------------- */
+const I18N = {
+  ar: {
+    brandSub:'الهندسة والتجارة والخدمات المحدودة',
+    tab_corr:'الأعطال',
+    title_corr:'الصيانة التصحيحية', sub_corr:'تسجيل الأعطال والإصلاحات لكل مولّد',
+    corr_new:'+ تسجيل عطل / إصلاح', corr_list:'السجل', corr_none:'لا توجد سجلات بعد',
+    corr_date:'التاريخ', corr_gen:'المولّد', corr_type:'النوع', corr_sev:'الخطورة', corr_status:'الحالة',
+    corr_hours:'ساعات التشغيل عند الحدث', corr_desc:'وصف العطل', corr_action:'الإجراء المتخذ',
+    corr_parts:'قطع الغيار المستخدمة', corr_downtime:'مدة التوقف (ساعة)', corr_by:'بواسطة',
+    corr_cost:'التكلفة', corr_closed:'تاريخ الإغلاق',
+    corr_t_failure:'عطل', corr_t_breakdown:'توقف مفاجئ', corr_t_repair:'إصلاح',
+    corr_t_replacement:'استبدال', corr_t_adjustment:'ضبط', corr_t_other:'أخرى',
+    corr_s_low:'منخفضة', corr_s_medium:'متوسطة', corr_s_high:'عالية', corr_s_critical:'حرجة',
+    corr_st_open:'مفتوح', corr_st_in_progress:'قيد التنفيذ', corr_st_closed:'مغلق',
+    corr_save:'حفظ السجل', corr_saved:'✅ تم حفظ السجل', corr_fail:'⚠️ تعذّر الحفظ — تحقق من الاتصال',
+    corr_need_desc:'⚠️ أدخل وصف العطل', corr_need_gen:'⚠️ اختر المولّد',
+    corr_delete:'حذف', corr_del_confirm:'حذف هذا السجل نهائيًا؟',
+    corr_filter_all:'الكل', corr_filter_open:'المفتوحة', corr_edit_status:'تغيير الحالة',
+    corr_open_count:'{n} عطل مفتوح',
+    rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
+    rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
+    rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
+    svc_backfilled:'مُدخل يدويًا', svc_none:'لا توجد صيانات مسجّلة في هذه الفترة',
+    svc_recent:'آخر الصيانات المنفّذة', svc_delete_confirm:'حذف هذا السجل من تاريخ الصيانة؟',
+    svc_deleted:'✅ تم الحذف', svc_kind_time:'حسب الوقت', svc_kind_hours:'حسب الساعات',
+    rep_backup:'⬇ نسخة احتياطية كاملة (Excel)', rep_backup_done:'✅ تم إنشاء النسخة الاحتياطية',
+    rep_all_gens:'كل المولّدات', rep_last_reading:'آخر قراءة', rep_readings_n:'عدد القراءات',
+    rep_overdue_svc:'صيانة متأخرة', rep_soon_svc:'صيانة قريبة', rep_open_faults:'أعطال مفتوحة', rep_total_faults:'إجمالي الأعطال',
+    tab_new:'قراءة', tab_history:'السجل', tab_reports:'التقارير', tab_maint:'الصيانة', tab_dashboard:'لوحة', tab_setup:'الإعداد',
+    title_maint:'الصيانة', sub_maint:'صيانة دورية حسب الوقت وساعات التشغيل',
+    maint_time:'حسب الوقت', maint_hours:'حسب ساعات التشغيل',
+    maint_interval:'الفترة', maint_lastdone:'آخر صيانة', maint_nextdue:'الاستحقاق القادم', maint_status:'الحالة',
+    maint_due_in_days:'خلال {n} يوم', maint_overdue_days:'متأخر {n} يوم', maint_due_today:'مستحق اليوم',
+    maint_due_in_hrs:'خلال {n} ساعة', maint_overdue_hrs:'متأخر {n} ساعة',
+    maint_at_hrs:'عند {n} ساعة', maint_current_hrs:'ساعات التشغيل الحالية: {n}',
+    maint_no_hours:'لا توجد قراءة ساعات بعد', maint_forecast:'متوقّع خلال ~{n} يوم',
+    maint_mark_done:'✓ تسجيل الصيانة', maint_done_toast:'✅ تم تسجيل الصيانة',
+    maint_done_confirm:'تسجيل إتمام صيانة "{name}" الآن؟', maint_fail:'⚠️ تعذّر الحفظ — تحقق من الاتصال',
+    maint_setup_hint:'حدّد ساعات التشغيل اليومية لكل مولّد لعرض توقّع موعد الصيانة.',
+    maint_hrs_per_day:'ساعات التشغيل يوميًا', maint_never:'—',
+    maint_hrs_per_day_hint:'(افتراضي 24)', maint_hrs_per_day_note:'المولّد يعمل 24 ساعة يوميًا افتراضيًا — غيّرها إذا كان له جدول مختلف (مثل 17 أو 7).',
+    maint_due_hrs_col:'الاستحقاق (ساعة)', maint_due_date_col:'تاريخ الاستحقاق',
+    maint_edit:'✎ تعديل',
+    maint_edit_date_prompt:'أدخل تاريخ آخر صيانة لـ "{name}" (YYYY-MM-DD):',
+    maint_edit_hrs_prompt:'أدخل ساعات التشغيل عند آخر صيانة لـ "{name}":',
+    maint_saved:'✅ تم الحفظ',
+    maint_bad_date:'⚠️ تاريخ غير صحيح — استخدم الصيغة YYYY-MM-DD',
+    maint_bad_hrs:'⚠️ رقم ساعات غير صحيح',
+    maint_nest_note:'ملاحظة: تسجيل صيانة أكبر يعيد ضبط الصيانات الأصغر تلقائيًا (مثال: 500 ساعة تشمل 250 و125).',
+    maint_nest_done:'✅ تم تسجيل {n} صيانة (شاملة الأصغر)',
+    maint_status_ok:'سليم', maint_status_soon:'قريبًا', maint_status_over:'متأخر',
+    maint_pick_gen:'اختر المولّد', maint_by:'بواسطة',
+    st_good:'🟢', st_soon:'🟡', st_over:'🔴',
+    rep_pdf:'⬇ تصدير PDF (رسمي)', rep_xlsx:'⬇ تصدير Excel',
+    rep_official_title:'تقرير قراءات المولّد', rep_gen_label:'المولّد', rep_client_label:'العميل',
+    rep_period_label:'الفترة', rep_printed:'تاريخ الطباعة', rep_prepared:'إعداد',
+    title_new:'قراءة جديدة', sub_new:'سجّل قراءات المولد اليوم',
+    title_history:'السجل', sub_history:'قراءات سابقة لجميع المولدات',
+    title_reports:'التقارير', sub_reports:'تقرير لكل مولد لأي يوم أو فترة',
+    title_dashboard:'لوحة المعلومات', sub_dashboard:'الاتجاهات والحالة الحالية',
+    title_setup:'الإعداد', sub_setup:'إدارة المولدات والإعدادات',
+    connecting:'جارٍ الاتصال...', couldnt_connect:'تعذّر الاتصال.', try_again:'حاول مرة أخرى',
+    sec_gen_visit:'المولد والزيارة', sec_core:'القراءات الأساسية', sec_voltage:'الجهد (فولت)',
+    sec_current:'التيار (أمبير)', sec_engine:'المحرك والسوائل', sec_notes:'ملاحظات',
+    f_generator:'المولد', f_tech:'اسم الفني', f_datetime:'التاريخ والوقت',
+    f_hours:'ساعات التشغيل', f_load:'الحِمل', f_rpm:'دورة/دقيقة',
+    f_freq:'التردد', f_oilP:'ضغط الزيت', f_oilT:'حرارة الزيت', f_coolantT:'حرارة المبرّد',
+    f_battV:'جهد البطارية', f_fuel:'مستوى الوقود',
+    ph_tech:'مثال: أحمد الصبري', ph_hours:'مثال: 4820.5', ph_load:'مثال: 85', ph_rpm:'مثال: 1500', ph_freq:'مثال: 50',
+    ph_notes:'أي تسريبات، ضوضاء غير عادية، دخان، إنذارات...',
+    save_reading:'💾 حفظ القراءة', saving:'جارٍ الحفظ...', retry_save:'🔄 إعادة المحاولة',
+    saved:'✅ تم حفظ القراءة', saved_flags:'✅ تم الحفظ — ⚠️ {n} خارج النطاق',
+    save_queued:'⚠️ سيتم المزامنة عند الاتصال. اضغط إعادة المحاولة إذا تكرر.',
+    warn_tech:'⚠️ أدخل اسم الفني', warn_datetime:'⚠️ حدّد التاريخ والوقت', warn_hours:'⚠️ أدخل ساعات التشغيل',
+    all:'الكل', reading_count:'{n} قراءة', export_csv:'⬇ تصدير CSV', by:'بواسطة',
+    hours:'ساعات', voltage_l1:'الجهد L1', coolant_c:'المبرّد °م', battery_v:'البطارية فولت', fuel_pct:'الوقود %', load_kw:'الحِمل ك.و',
+    out_of_range:'⚠️ خارج النطاق: {list}', view_all:'عرض جميع القراءات', delete_reading:'حذف هذه القراءة',
+    unknown:'غير معروف', no_readings_filter:'لا توجد قراءات لهذا الفلتر.',
+    deleted:'🗑️ تم حذف القراءة', del_fail:'⚠️ تعذّر الحذف — تحقق من الاتصال',
+    csv_downloaded:'⬇ تم تنزيل CSV',
+    latest_status:'الحالة الأخيرة', hours_latest:'ساعات (الأخيرة)', coolant_temp:'حرارة المبرّد', battery:'البطارية', fuel:'الوقود',
+    total_logged:'{n} قراءة مسجّلة · الأخيرة: {when}', alert_summary:'⚠️ {n} من آخر {m} قراءات كانت خارج النطاق',
+    no_readings_gen:'لا توجد قراءات لهذا المولد بعد.',
+    voltage_trend:'اتجاه الجهد (فولت)', coolant_trend:'اتجاه حرارة المبرّد (°م)', hours_trend:'ساعات التشغيل (الاستخدام)',
+    need_two:'سجّل قراءتين على الأقل لهذا المولد لعرض المخططات.',
+    dash_empty:'أضف مولّدًا لعرض لوحته.',
+    rep_settings:'إعدادات التقرير', rep_period:'الفترة', rep_single:'يوم واحد', rep_range:'نطاق تواريخ',
+    rep_date:'التاريخ', rep_from:'من', rep_to:'إلى', rep_generate:'📄 إنشاء التقرير',
+    rep_readings:'قراءات', rep_with_oor:'بها قيم خارج النطاق', rep_none:'لا توجد قراءات لهذا المولد في هذه الفترة.',
+    rep_hint:'الخلايا الحمراء خارج النطاق الطبيعي. مرّر الجدول جانبيًا لعرض جميع الأعمدة.',
+    rep_export:'⬇ تصدير إلى CSV / إكسل',
+    col_when:'الوقت', col_hrs:'ساعة', col_kw:'ك.و', col_vl1:'ج L1', col_vl2:'ج L2', col_vl3:'ج L3', col_hz:'هرتز',
+    col_cool:'حرارة', col_oilp:'ضغط', col_batt:'بطارية', col_fuel:'وقود%',
+    warn_daterange:'⚠️ تاريخ "من" بعد تاريخ "إلى"', warn_nothing:'⚠️ لا يوجد ما يُصدَّر', rep_exported:'⬇ تم تصدير التقرير',
+    your_gens:'مولداتك ({n})', add_gen:'إضافة مولد', gen_name:'الاسم', gen_client:'الجهة',
+    rename:'إعادة تسمية', remove:'حذف', add_gen_btn:'➕ إضافة مولد', readings_lbl:'قراءات', no_gens:'لا توجد مولدات بعد.',
+    thresholds:'حدود التنبيه (المستخدمة للإشارة)',
+    data_sync:'البيانات والمزامنة', data_sync_body:'تتم مزامنة القراءات مباشرة إلى السحابة — يرى كل فني نفس البيانات في الوقت الفعلي. تعمل دون اتصال أيضًا: تُحفظ محليًا وتُزامَن عند عودة الاتصال.',
+    added:'✅ تمت إضافة المولد', add_fail:'⚠️ تعذّرت الإضافة — تحقق من الاتصال',
+    rename_prompt:'إعادة تسمية المولد:', rename_fail:'⚠️ تعذّرت إعادة التسمية — تحقق من الاتصال',
+    remove_confirm:'إزالة {name}؟', remove_confirm_n:'يحتوي هذا المولد على {n} قراءة محفوظة. إزالته على أي حال؟ ستبقى قراءاته في السجل بدون ربط.',
+    removed:'🗑️ تمت إزالة المولد', remove_fail:'⚠️ تعذّرت الإزالة — تحقق من الاتصال',
+    warn_genname:'⚠️ أدخل اسم المولد', del_confirm:'حذف هذه القراءة؟ لا يمكن التراجع.',
+    client_other:'أخرى',
+    err_perm:'رُفض الوصول بواسطة قواعد أمان Firestore. في وحدة تحكم Firebase ← Firestore ← القواعد، تأكد من نشر القواعد والسماح بالوصول عند request.auth != null.',
+    err_net:'تعذّر الوصول إلى الشبكة. تحقق من اتصالك بالإنترنت وحاول مجددًا.',
+    err_auth:'تسجيل الدخول المجهول غير مُفعّل. في Firebase ← Authentication ← طريقة الدخول، فعّل Anonymous.',
+    err_db:'يبدو أن قاعدة بيانات Firestore لم تُنشأ بعد. في Firebase ← Firestore، اضغط إنشاء قاعدة بيانات.',
+    err_generic:'شيء ما يمنع الاتصال. تأكد من: إنشاء Firestore، تفعيل الدخول المجهول، ونشر القواعد.',
+    company_line:'البيئة · السلامة · الهندسة',
+  },
+  en: {
+    brandSub:'Engineering, Trading & Services Ltd.',
+    tab_corr:'Faults',
+    title_corr:'Corrective Maintenance', sub_corr:'Record faults and repairs per generator',
+    corr_new:'+ Log fault / repair', corr_list:'Records', corr_none:'No records yet',
+    corr_date:'Date', corr_gen:'Generator', corr_type:'Type', corr_sev:'Severity', corr_status:'Status',
+    corr_hours:'Running hours at event', corr_desc:'Fault description', corr_action:'Action taken',
+    corr_parts:'Parts used', corr_downtime:'Downtime (hrs)', corr_by:'Reported by',
+    corr_cost:'Cost', corr_closed:'Closed date',
+    corr_t_failure:'Failure', corr_t_breakdown:'Breakdown', corr_t_repair:'Repair',
+    corr_t_replacement:'Replacement', corr_t_adjustment:'Adjustment', corr_t_other:'Other',
+    corr_s_low:'Low', corr_s_medium:'Medium', corr_s_high:'High', corr_s_critical:'Critical',
+    corr_st_open:'Open', corr_st_in_progress:'In progress', corr_st_closed:'Closed',
+    corr_save:'Save record', corr_saved:'✅ Record saved', corr_fail:'⚠️ Could not save — check connection',
+    corr_need_desc:'⚠️ Enter a fault description', corr_need_gen:'⚠️ Select a generator',
+    corr_delete:'Delete', corr_del_confirm:'Delete this record permanently?',
+    corr_filter_all:'All', corr_filter_open:'Open only', corr_edit_status:'Change status',
+    corr_open_count:'{n} open fault(s)',
+    rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
+    rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
+    rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
+    svc_backfilled:'Back-filled', svc_none:'No services recorded in this period',
+    svc_recent:'Recent services performed', svc_delete_confirm:'Delete this entry from the service history?',
+    svc_deleted:'✅ Deleted', svc_kind_time:'By time', svc_kind_hours:'By hours',
+    rep_backup:'⬇ Full data backup (Excel)', rep_backup_done:'✅ Backup created',
+    rep_all_gens:'All generators', rep_last_reading:'Last reading', rep_readings_n:'Readings',
+    rep_overdue_svc:'Overdue svc', rep_soon_svc:'Due soon', rep_open_faults:'Open faults', rep_total_faults:'Total faults',
+    tab_new:'New', tab_history:'History', tab_reports:'Reports', tab_maint:'Service', tab_dashboard:'Dashboard', tab_setup:'Setup',
+    title_maint:'Maintenance', sub_maint:'Scheduled service by time and running hours',
+    maint_time:'By time', maint_hours:'By running hours',
+    maint_interval:'Interval', maint_lastdone:'Last done', maint_nextdue:'Next due', maint_status:'Status',
+    maint_due_in_days:'in {n} days', maint_overdue_days:'overdue {n} days', maint_due_today:'due today',
+    maint_due_in_hrs:'in {n} hrs', maint_overdue_hrs:'overdue {n} hrs',
+    maint_at_hrs:'at {n} hr', maint_current_hrs:'Current running hours: {n}',
+    maint_no_hours:'No hours reading yet', maint_forecast:'~{n} days at current use',
+    maint_mark_done:'✓ Log service done', maint_done_toast:'✅ Service logged',
+    maint_done_confirm:'Log "{name}" as done now?', maint_fail:'⚠️ Could not save — check connection',
+    maint_setup_hint:'Set daily running hours per generator to forecast when hours-based service falls due.',
+    maint_hrs_per_day:'Running hrs / day', maint_never:'—',
+    maint_hrs_per_day_hint:'(default 24)', maint_hrs_per_day_note:'Generator runs 24 hrs/day by default — change it if this generator has a different schedule (e.g. 17 or 7).',
+    maint_due_hrs_col:'Due (hrs)', maint_due_date_col:'Due date',
+    maint_edit:'✎ Edit',
+    maint_edit_date_prompt:'Enter last service DATE for "{name}" (YYYY-MM-DD):',
+    maint_edit_hrs_prompt:'Enter running HOURS at last service for "{name}":',
+    maint_saved:'✅ Saved',
+    maint_bad_date:'⚠️ Invalid date — use format YYYY-MM-DD',
+    maint_bad_hrs:'⚠️ Invalid hours number',
+    maint_nest_note:'Note: logging a larger service automatically resets the smaller ones it includes (e.g. 500 hr covers 250 & 125).',
+    maint_nest_done:'✅ Logged {n} services (including smaller ones)',
+    maint_status_ok:'OK', maint_status_soon:'Soon', maint_status_over:'Overdue',
+    maint_pick_gen:'Select generator', maint_by:'by',
+    st_good:'🟢', st_soon:'🟡', st_over:'🔴',
+    rep_pdf:'⬇ Export PDF (official)', rep_xlsx:'⬇ Export Excel',
+    rep_official_title:'Generator Reading Report', rep_gen_label:'Generator', rep_client_label:'Client',
+    rep_period_label:'Period', rep_printed:'Printed', rep_prepared:'Prepared by',
+    title_new:'New Reading', sub_new:'Log today\u2019s generator readings',
+    title_history:'History', sub_history:'Past readings for all generators',
+    title_reports:'Reports', sub_reports:'Per-generator report for any day or period',
+    title_dashboard:'Dashboard', sub_dashboard:'Trends and current status',
+    title_setup:'Setup', sub_setup:'Manage generators & settings',
+    connecting:'Connecting...', couldnt_connect:'Couldn\u2019t connect.', try_again:'Try again',
+    sec_gen_visit:'Generator & Visit', sec_core:'Core readings', sec_voltage:'Voltage (V)',
+    sec_current:'Current (A)', sec_engine:'Engine & fluids', sec_notes:'Notes',
+    f_generator:'Generator', f_tech:'Technician name', f_datetime:'Date & time',
+    f_hours:'Running hours', f_load:'Load', f_rpm:'RPM',
+    f_freq:'Frequency', f_oilP:'Oil pressure', f_oilT:'Oil temp', f_coolantT:'Coolant temp',
+    f_battV:'Battery voltage', f_fuel:'Fuel level',
+    ph_tech:'e.g. Ahmed Al-Sabri', ph_hours:'e.g. 4820.5', ph_load:'e.g. 85', ph_rpm:'e.g. 1500', ph_freq:'e.g. 50',
+    ph_notes:'Any leaks, unusual noise, smoke, alarms...',
+    save_reading:'💾 Save Reading', saving:'Saving...', retry_save:'🔄 Retry save',
+    saved:'✅ Reading saved', saved_flags:'✅ Saved — ⚠️ {n} out of range',
+    save_queued:'⚠️ Save queued — will sync once connected. Tap Retry if this repeats.',
+    warn_tech:'⚠️ Enter technician name', warn_datetime:'⚠️ Set date & time', warn_hours:'⚠️ Enter running hours',
+    all:'All', reading_count:'{n} reading(s)', export_csv:'⬇ Export CSV', by:'By',
+    hours:'Hours', voltage_l1:'Voltage L1', coolant_c:'Coolant °C', battery_v:'Battery V', fuel_pct:'Fuel %', load_kw:'Load kW',
+    out_of_range:'⚠️ Out of range: {list}', view_all:'View all readings', delete_reading:'Delete this reading',
+    unknown:'Unknown', no_readings_filter:'No readings yet for this filter.',
+    deleted:'🗑️ Reading deleted', del_fail:'⚠️ Could not delete — check connection and try again',
+    csv_downloaded:'⬇ CSV downloaded',
+    latest_status:'Latest status', hours_latest:'Hours (latest)', coolant_temp:'Coolant Temp', battery:'Battery', fuel:'Fuel',
+    total_logged:'{n} total readings logged · last: {when}', alert_summary:'⚠️ {n} of the last {m} readings had out-of-range values',
+    no_readings_gen:'No readings logged for this generator yet.',
+    voltage_trend:'Voltage trend (V)', coolant_trend:'Coolant temperature trend (°C)', hours_trend:'Running hours (usage over time)',
+    need_two:'Log at least 2 readings for this generator to see trend charts.',
+    dash_empty:'Add a generator to see its dashboard.',
+    rep_settings:'Report settings', rep_period:'Period', rep_single:'Single day', rep_range:'Date range',
+    rep_date:'Date', rep_from:'From', rep_to:'To', rep_generate:'📄 Generate report',
+    rep_readings:'Readings', rep_with_oor:'With out-of-range', rep_none:'No readings found for this generator in this period.',
+    rep_hint:'Red cells are outside normal range. Scroll the table sideways to see all columns.',
+    rep_export:'⬇ Export to CSV / Excel',
+    col_when:'When', col_hrs:'Hrs', col_kw:'kW', col_vl1:'V L1', col_vl2:'V L2', col_vl3:'V L3', col_hz:'Hz',
+    col_cool:'Cool°', col_oilp:'OilP', col_batt:'Batt', col_fuel:'Fuel%',
+    warn_daterange:'⚠️ "From" date is after "To" date', warn_nothing:'⚠️ Nothing to export', rep_exported:'⬇ Report exported',
+    your_gens:'Your generators ({n})', add_gen:'Add a generator', gen_name:'Name', gen_client:'Client',
+    rename:'Rename', remove:'Remove', add_gen_btn:'➕ Add Generator', readings_lbl:'readings', no_gens:'No generators yet.',
+    thresholds:'Alert thresholds (defaults used for flagging)',
+    data_sync:'Data & sync', data_sync_body:'Readings sync live to the cloud — every technician\u2019s phone sees the same data in real time. Works offline too: readings save locally in the field and sync automatically once back online.',
+    added:'✅ Generator added', add_fail:'⚠️ Could not add — check connection and try again',
+    rename_prompt:'Rename generator:', rename_fail:'⚠️ Could not rename — check connection and try again',
+    remove_confirm:'Remove {name}?', remove_confirm_n:'This generator has {n} saved readings. Remove it anyway? Its readings will remain in history but unlinked.',
+    removed:'🗑️ Generator removed', remove_fail:'⚠️ Could not remove — check connection and try again',
+    warn_genname:'⚠️ Enter a generator name', del_confirm:'Delete this reading? This cannot be undone.',
+    client_other:'Other',
+    err_perm:'Access denied by Firestore security rules. In Firebase Console → Firestore Database → Rules, make sure the rules are published (not just typed in) and allow access when request.auth != null.',
+    err_net:'Can\u2019t reach the network. Check your internet connection and try again.',
+    err_auth:'Anonymous sign-in isn\u2019t enabled yet. In Firebase Console → Authentication → Sign-in method, enable Anonymous.',
+    err_db:'Firestore database doesn\u2019t seem to be created yet. In Firebase Console → Firestore Database, click Create database.',
+    err_generic:'Something\u2019s blocking the connection. Double-check: Firestore is created, Anonymous sign-in is enabled, and security rules are published.',
+    company_line:'Environmental · Safety · Engineering',
+  }
+};
+
+function getLang(){
+  try{ return localStorage.getItem('es-lang') || 'ar'; }catch(e){ return 'ar'; }
+}
+function setLang(lang){
+  try{ localStorage.setItem('es-lang', lang); }catch(e){}
+  STATE.lang = lang;
+  applyLangChrome();
+  render();
+}
+function t(key, vars){
+  const lang = STATE.lang || 'ar';
+  let s = (I18N[lang] && I18N[lang][key]) || (I18N.en[key]) || key;
+  if(vars){ Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', vars[k]); }); }
+  return s;
+}
+function applyLangChrome(){
+  const lang = STATE.lang || 'ar';
+  const de = document.documentElement;
+  if(de && de.setAttribute){
+    de.setAttribute('lang', lang);
+    de.setAttribute('dir', lang==='ar' ? 'rtl' : 'ltr');
+  }
+  const arBtn = document.getElementById('langAr'), enBtn = document.getElementById('langEn');
+  if(arBtn && enBtn && arBtn.classList && arBtn.classList.toggle){
+    arBtn.classList.toggle('active', lang==='ar');
+    enBtn.classList.toggle('active', lang==='en');
+  }
+  const sub = document.querySelector('.brand .sub');
+  if(sub) sub.textContent = t('brandSub');
+  document.querySelectorAll('[data-tabkey]').forEach(el=>{
+    el.textContent = t(el.getAttribute('data-tabkey'));
+  });
+}
+
+let STATE = {
+  generators: [],
+  readings: [],
+  maintenance: [],
+  corrective: [],
+  svclog: [],
+  corrGenId: null,
+  corrFilter: 'all',
+  maintGenId: null,
+  lang: 'ar',
+  activeTab: 'new',
+  historyGenFilter: 'all',
+  dashGenId: null,
+  charts: {},
+  everRendered: false,
+  reportGenId: null,
+  reportMode: 'range',   // 'day' or 'range'
+  reportDay: '',
+  reportFrom: '',
+  reportTo: '',
+  reportRun: false,
+  reportType: 'readings',
+};
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function genById(id){ return STATE.generators.find(g=>g.id===id); }
+
+function flagsFor(r){
+  const flags = [];
+  const checks = [
+    ['vL1','Voltage L1'], ['vL2','Voltage L2'], ['vL3','Voltage L3'],
+    ['freq','Frequency'], ['oilP','Oil pressure'], ['coolantT','Coolant temp'],
+    ['oilT','Oil temp'], ['battV','Battery voltage'], ['fuel','Fuel level'],
+  ];
+  checks.forEach(([key,label])=>{
+    const val = r[key];
+    if(val===''||val===null||val===undefined) return;
+    const num = parseFloat(val);
+    if(isNaN(num)) return;
+    const range = RANGES[key];
+    if(!range) return;
+    const [min,max] = range;
+    if((min!==null && num<min) || (max!==null && num>max)){
+      flags.push(label);
+    }
+  });
+  return flags;
+}
+
+// Returns a Set of field keys that are out of range, for per-cell highlighting.
+function outOfRangeKeys(r){
+  const keys = ['vL1','vL2','vL3','freq','oilP','coolantT','oilT','battV','fuel'];
+  const bad = new Set();
+  keys.forEach(key=>{
+    const val = r[key];
+    if(val===''||val===null||val===undefined) return;
+    const num = parseFloat(val);
+    if(isNaN(num)) return;
+    const range = RANGES[key];
+    if(!range) return;
+    const [min,max] = range;
+    if((min!==null && num<min) || (max!==null && num>max)) bad.add(key);
+  });
+  return bad;
+}
+
+// Filter readings for a generator within the currently-selected report period.
+function readingsForReport(){
+  const genId = STATE.reportGenId;
+  if(!genId) return [];
+  let from=null, to=null;
+  if(STATE.reportMode==='day'){
+    if(!STATE.reportDay) return [];
+    from = new Date(STATE.reportDay + 'T00:00:00');
+    to   = new Date(STATE.reportDay + 'T23:59:59.999');
+  } else {
+    if(!STATE.reportFrom || !STATE.reportTo) return [];
+    from = new Date(STATE.reportFrom + 'T00:00:00');
+    to   = new Date(STATE.reportTo + 'T23:59:59.999');
+  }
+  return STATE.readings
+    .filter(r=> r.genId===genId)
+    .filter(r=>{ const ts=new Date(r.timestamp); return ts>=from && ts<=to; })
+    .sort((a,b)=> new Date(a.timestamp)-new Date(b.timestamp));
+}
+
+/* ---------------- Init ---------------- */
+async function seedDefaultGeneratorsIfEmpty(){
+  const snap = await db.collection(GENERATORS_COLLECTION).limit(1).get();
+  if(!snap.empty) return;
+  const batch = db.batch();
+  DEFAULT_GENERATORS.forEach(g=>{
+    const ref = db.collection(GENERATORS_COLLECTION).doc(g.id);
+    batch.set(ref, { name: g.name, client: g.client });
+  });
+  await batch.commit();
+}
+
+function describeConnectError(err){
+  const code = (err && err.code) || '';
+  if(code === 'permission-denied') return t('err_perm');
+  if(code === 'unavailable' || code === 'network-request-failed') return t('err_net');
+  if(code === 'auth/operation-not-allowed') return t('err_auth');
+  if(code === 'failed-precondition' || code === 'not-found') return t('err_db');
+  return t('err_generic') + (code ? ' (' + code + ')' : '');
+}
+
+function showConnectError(err){
+  if(STATE.everRendered) return;
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="empty"><div class="em-ic">📡</div>${t('couldnt_connect')}<br><br>
+    <span style="font-size:13px;color:var(--muted);display:block;max-width:320px;margin:0 auto 16px;">${describeConnectError(err)}</span>
+    <button class="btn btn-primary" style="width:auto;padding:12px 22px;" onclick="init()">${t('try_again')}</button></div>`;
+}
+
+async function init(){
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="empty"><div class="em-ic">⏳</div>${t('connecting')}</div>`;
+
+  try{
+    await authReady();
+  }catch(e){
+    console.warn('auth failed', e);
+    showConnectError(e);
+    return;
+  }
+
+  try{
+    await seedDefaultGeneratorsIfEmpty();
+  }catch(e){
+    console.warn('Seeding check failed:', e);
+    // Don't bail yet — the live listeners below will surface the same error
+    // clearly if this is a real permissions/setup problem.
+  }
+
+  if(unsubGenerators) unsubGenerators();
+  if(unsubReadings) unsubReadings();
+  if(unsubMaint) unsubMaint();
+  if(unsubCorr) unsubCorr();
+  if(unsubSvc) unsubSvc();
+
+  let generatorsLoaded = false, readingsLoaded = false;
+  function maybeFirstRender(){
+    if(generatorsLoaded && readingsLoaded && !STATE.everRendered){
+      STATE.everRendered = true;
+      if(STATE.generators.length) STATE.dashGenId = STATE.generators[0].id;
+      render();
+    }
+  }
+
+  // Safety net: never leave the technician staring at "Connecting..." forever.
+  setTimeout(()=>{
+    if(!STATE.everRendered){
+      showConnectError({ code: generatorsLoaded || readingsLoaded ? '' : 'timeout' });
+    }
+  }, 10000);
+
+  unsubGenerators = db.collection(GENERATORS_COLLECTION).onSnapshot(snap=>{
+    STATE.generators = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    generatorsLoaded = true;
+    if(!STATE.dashGenId && STATE.generators.length) STATE.dashGenId = STATE.generators[0].id;
+    maybeFirstRender();
+    if(STATE.everRendered && STATE.activeTab !== 'new') render();
+  }, err=>{
+    console.warn('generators listener error', err);
+    showConnectError(err);
+  });
+
+  unsubReadings = db.collection(READINGS_COLLECTION).onSnapshot(snap=>{
+    STATE.readings = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    readingsLoaded = true;
+    maybeFirstRender();
+    if(STATE.everRendered && STATE.activeTab !== 'new') render();
+  }, err=>{
+    console.warn('readings listener error', err);
+    showConnectError(err);
+  });
+
+  unsubMaint = db.collection(MAINT_COLLECTION).onSnapshot(snap=>{
+    STATE.maintenance = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered && STATE.activeTab === 'maintenance') render();
+  }, err=>{
+    console.warn('maintenance listener error', err);
+  });
+
+  unsubCorr = db.collection(CORR_COLLECTION).onSnapshot(snap=>{
+    STATE.corrective = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered && (STATE.activeTab === 'corrective' || STATE.activeTab === 'reports' || STATE.activeTab === 'dashboard')) render();
+  }, err=>{
+    console.warn('corrective listener error', err);
+  });
+
+  unsubSvc = db.collection(SVCLOG_COLLECTION).onSnapshot(snap=>{
+    STATE.svclog = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered && (STATE.activeTab === 'maintenance' || STATE.activeTab === 'reports')) render();
+  }, err=>{
+    console.warn('servicelog listener error', err);
+  });
+}
+
+/* ---------------- Tab switching ---------------- */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    STATE.activeTab = btn.dataset.tab;
+    render();
+  });
+});
+
+const TAB_TITLE_KEYS = {
+  new: ['title_new','sub_new'],
+  history: ['title_history','sub_history'],
+  reports: ['title_reports','sub_reports'],
+  maintenance: ['title_maint','sub_maint'],
+  corrective: ['title_corr','sub_corr'],
+  dashboard: ['title_dashboard','sub_dashboard'],
+  generators: ['title_setup','sub_setup'],
+};
+
+function setHeader(){
+  const [tk,sk] = TAB_TITLE_KEYS[STATE.activeTab];
+  document.getElementById('pageTitle').textContent = t(tk);
+  document.getElementById('pageSub').textContent = t(sk);
+}
+
+/* ---------------- Render router ---------------- */
+function render(){
+  setHeader();
+  const app = document.getElementById('app');
+  if(STATE.activeTab==='new') app.innerHTML = renderNewForm();
+  else if(STATE.activeTab==='history') app.innerHTML = renderHistory();
+  else if(STATE.activeTab==='reports') app.innerHTML = renderReports();
+  else if(STATE.activeTab==='maintenance') app.innerHTML = renderMaintenance();
+  else if(STATE.activeTab==='corrective') app.innerHTML = renderCorrective();
+  else if(STATE.activeTab==='dashboard') app.innerHTML = renderDashboard();
+  else if(STATE.activeTab==='generators') app.innerHTML = renderGenerators();
+
+  if(STATE.activeTab==='new') bindNewForm();
+  if(STATE.activeTab==='history') bindHistory();
+  if(STATE.activeTab==='reports') bindReports();
+  if(STATE.activeTab==='maintenance') bindMaintenance();
+  if(STATE.activeTab==='corrective') bindCorrective();
+  if(STATE.activeTab==='dashboard'){ bindDashboard(); setTimeout(drawDashCharts, 30); }
+  if(STATE.activeTab==='generators') bindGenerators();
+}
+
+/* ================= NEW READING ================= */
+function nowLocalDatetime(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
+}
+
+function renderNewForm(){
+  if(!STATE.generators.length){
+    return `<div class="card empty"><div class="em-ic">🔌</div>${t('no_gens')}</div>`;
+  }
+  const genOptions = STATE.generators.map(g=>`<option value="${g.id}">${g.name} · ${g.client}</option>`).join('');
+  return `
+  <div class="card">
+    <h3>${t('sec_gen_visit')}</h3>
+    <label class="req">${t('f_generator')}</label>
+    <select id="f-gen">${genOptions}</select>
+
+    <label class="req">${t('f_tech')}</label>
+    <input type="text" id="f-tech" placeholder="${t('ph_tech')}">
+
+    <label class="req">${t('f_datetime')}</label>
+    <input type="datetime-local" id="f-datetime" value="${nowLocalDatetime()}">
+  </div>
+
+  <div class="card">
+    <h3>${t('sec_core')}</h3>
+    <label class="req">${t('f_hours')} <span class="unit">(hr)</span></label>
+    <input type="number" step="0.1" id="f-hours" placeholder="${t('ph_hours')}">
+
+    <label>${t('f_load')} <span class="unit">(kW)</span></label>
+    <input type="number" step="0.1" id="f-load" placeholder="${t('ph_load')}">
+
+    <label>${t('f_rpm')}</label>
+    <input type="number" step="1" id="f-rpm" placeholder="${t('ph_rpm')}">
+  </div>
+
+  <div class="card">
+    <h3>${t('sec_voltage')}</h3>
+    <div class="grid3">
+      <div><label>L1-N</label><input type="number" step="0.1" id="f-vL1"></div>
+      <div><label>L2-N</label><input type="number" step="0.1" id="f-vL2"></div>
+      <div><label>L3-N</label><input type="number" step="0.1" id="f-vL3"></div>
+    </div>
+    <label>${t('f_freq')} <span class="unit">(Hz)</span></label>
+    <input type="number" step="0.1" id="f-freq" placeholder="${t('ph_freq')}">
+  </div>
+
+  <div class="card">
+    <h3>${t('sec_current')}</h3>
+    <div class="grid3">
+      <div><label>L1</label><input type="number" step="0.1" id="f-iL1"></div>
+      <div><label>L2</label><input type="number" step="0.1" id="f-iL2"></div>
+      <div><label>L3</label><input type="number" step="0.1" id="f-iL3"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>${t('sec_engine')}</h3>
+    <div class="grid2">
+      <div><label>${t('f_oilP')} <span class="unit">(bar)</span></label><input type="number" step="0.1" id="f-oilP"></div>
+      <div><label>${t('f_oilT')} <span class="unit">(°C)</span></label><input type="number" step="0.1" id="f-oilT"></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('f_coolantT')} <span class="unit">(°C)</span></label><input type="number" step="0.1" id="f-coolantT"></div>
+      <div><label>${t('f_battV')} <span class="unit">(V)</span></label><input type="number" step="0.1" id="f-battV"></div>
+    </div>
+    <label>${t('f_fuel')} <span class="unit">(%)</span></label>
+    <input type="number" step="1" min="0" max="100" id="f-fuel">
+  </div>
+
+  <div class="card">
+    <h3>${t('sec_notes')}</h3>
+    <textarea id="f-notes" placeholder="${t('ph_notes')}"></textarea>
+    <button class="btn btn-primary" id="saveBtn">${t('save_reading')}</button>
+  </div>
+  `;
+}
+
+async function bindNewForm(){
+  let lastTech = null;
+  try{ lastTech = localStorage.getItem(TECH_LOCAL_KEY); }catch(e){}
+  if(lastTech) document.getElementById('f-tech').value = lastTech;
+
+  document.getElementById('saveBtn').addEventListener('click', async ()=>{
+    const gen = document.getElementById('f-gen').value;
+    const tech = document.getElementById('f-tech').value.trim();
+    const dt = document.getElementById('f-datetime').value;
+    const hours = document.getElementById('f-hours').value;
+
+    if(!tech){ showToast(t('warn_tech')); return; }
+    if(!dt){ showToast(t('warn_datetime')); return; }
+    if(hours===''){ showToast(t('warn_hours')); return; }
+
+    const reading = {
+      genId: gen,
+      timestamp: new Date(dt).toISOString(),
+      tech,
+      hours: parseFloat(hours),
+      load: document.getElementById('f-load').value,
+      rpm: document.getElementById('f-rpm').value,
+      vL1: document.getElementById('f-vL1').value,
+      vL2: document.getElementById('f-vL2').value,
+      vL3: document.getElementById('f-vL3').value,
+      freq: document.getElementById('f-freq').value,
+      iL1: document.getElementById('f-iL1').value,
+      iL2: document.getElementById('f-iL2').value,
+      iL3: document.getElementById('f-iL3').value,
+      oilP: document.getElementById('f-oilP').value,
+      oilT: document.getElementById('f-oilT').value,
+      coolantT: document.getElementById('f-coolantT').value,
+      battV: document.getElementById('f-battV').value,
+      fuel: document.getElementById('f-fuel').value,
+      notes: document.getElementById('f-notes').value.trim(),
+      savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = t('saving');
+
+    const doSave = async ()=>{
+      try{
+        await db.collection(READINGS_COLLECTION).add(reading);
+        try{ localStorage.setItem(TECH_LOCAL_KEY, tech); }catch(e){}
+        const flags = flagsFor(reading);
+        showToast(flags.length ? t('saved_flags',{n:flags.length}) : t('saved'));
+        saveBtn.disabled = false;
+        saveBtn.onclick = null;
+        render();
+      }catch(e){
+        console.warn('save failed', e);
+        showToast(t('save_queued'));
+        saveBtn.disabled = false;
+        saveBtn.textContent = t('retry_save');
+        saveBtn.onclick = doSave;
+      }
+    };
+    await doSave();
+  });
+}
+
+/* ================= HISTORY ================= */
+function renderHistory(){
+  const filterChips = `<div class="genpicker">
+    <div class="genchip ${STATE.historyGenFilter==='all'?'active':''}" data-gen="all">${t('all')}</div>
+    ${STATE.generators.map(g=>`<div class="genchip ${STATE.historyGenFilter===g.id?'active':''}" data-gen="${g.id}">${g.name}</div>`).join('')}
+  </div>`;
+
+  let list = STATE.readings
+    .filter(r=> STATE.historyGenFilter==='all' || r.genId===STATE.historyGenFilter)
+    .sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp));
+
+  if(!list.length){
+    return `<div class="card">${filterChips}</div><div class="empty"><div class="em-ic">📭</div>${t('no_readings_filter')}</div>`;
+  }
+
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const cards = list.map(r=>{
+    const g = genById(r.genId);
+    const flags = flagsFor(r);
+    const dt = new Date(r.timestamp);
+    const dtStr = dt.toLocaleDateString(loc,{month:'short',day:'numeric',year:'numeric'}) + ' · ' + dt.toLocaleTimeString(loc,{hour:'2-digit',minute:'2-digit'});
+    return `
+    <div class="hcard">
+      <div class="htop">
+        <div class="hgen">${g? g.name : t('unknown')} <span class="badge ${g&&g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${g?g.client:''}</span></div>
+        <div class="htime">${dtStr}</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);">${t('by')} ${r.tech}</div>
+      <div class="hgrid">
+        <div><span>${t('hours')}</span>${r.hours ?? '-'}</div>
+        <div><span>${t('voltage_l1')}</span>${r.vL1||'-'}</div>
+        <div><span>${t('coolant_c')}</span>${r.coolantT||'-'}</div>
+        <div><span>${t('battery_v')}</span>${r.battV||'-'}</div>
+        <div><span>${t('fuel_pct')}</span>${r.fuel||'-'}</div>
+        <div><span>${t('load_kw')}</span>${r.load||'-'}</div>
+      </div>
+      ${flags.length? `<div class="flagline">${t('out_of_range',{list:flags.join(', ')})}</div>`:''}
+      ${r.notes? `<div class="notes">"${r.notes}"</div>`:''}
+      <details>
+        <summary>${t('view_all')}</summary>
+        <div class="full">
+          ${t('sec_voltage')}: L1 ${r.vL1||'-'} · L2 ${r.vL2||'-'} · L3 ${r.vL3||'-'} · ${r.freq||'-'} Hz<br>
+          ${t('sec_current')}: L1 ${r.iL1||'-'} · L2 ${r.iL2||'-'} · L3 ${r.iL3||'-'}<br>
+          ${t('f_oilP')} ${r.oilP||'-'} bar · ${t('f_oilT')} ${r.oilT||'-'} °C<br>
+          ${t('f_rpm')} ${r.rpm||'-'}
+        </div>
+        <button class="btn btn-danger btn-sm" style="margin-top:10px;" data-del="${r.id}">${t('delete_reading')}</button>
+      </details>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">${filterChips}
+    <div class="rowbetween">
+      <span style="font-size:12.5px;color:var(--muted);">${t('reading_count',{n:list.length})}</span>
+      <button class="btn btn-outline btn-sm" id="exportBtn">${t('export_csv')}</button>
+    </div>
+  </div>${cards}`;
+}
+
+function bindHistory(){
+  document.querySelectorAll('[data-gen]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      STATE.historyGenFilter = chip.dataset.gen;
+      render();
+    });
+  });
+  const exportBtn = document.getElementById('exportBtn');
+  if(exportBtn) exportBtn.addEventListener('click', exportCSV);
+  document.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('del_confirm'))) return;
+      try{
+        await db.collection(READINGS_COLLECTION).doc(btn.dataset.del).delete();
+        showToast(t('deleted'));
+      }catch(e){
+        console.warn('delete failed', e);
+        showToast(t('del_fail'));
+      }
+    });
+  });
+}
+
+function exportCSV(){
+  const cols = ['timestamp','genName','client','tech','hours','load','rpm','vL1','vL2','vL3','freq','iL1','iL2','iL3','oilP','oilT','coolantT','battV','fuel','notes'];
+  const rows = STATE.readings
+    .filter(r=> STATE.historyGenFilter==='all' || r.genId===STATE.historyGenFilter)
+    .sort((a,b)=> new Date(a.timestamp)-new Date(b.timestamp))
+    .map(r=>{
+      const g = genById(r.genId);
+      const row = {...r, genName: g?g.name:'', client: g?g.client:''};
+      return cols.map(c=>{
+        let v = row[c] ?? '';
+        v = String(v).replace(/"/g,'""');
+        return `"${v}"`;
+      }).join(',');
+    });
+  const csv = cols.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `EnvironmSafe_Generator_Readings_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('csv_downloaded'));
+}
+
+/* ================= DASHBOARD ================= */
+// Dashboard card: scheduled-service status + open faults for the selected generator
+function dashServiceCard(){
+  const genId = STATE.dashGenId;
+  const m = maintDocFor(genId) || {};
+  const cur = latestHoursFor(genId);
+  let over=0, soon=0, nextItem=null, nextDays=Infinity;
+
+  TIME_INTERVALS.forEach(iv=>{
+    const s = timeStatus(iv, (m.time||{})[iv.key]);
+    if(s.state==='over') over++;
+    else if(s.state==='soon') soon++;
+    if(s.deltaDays!==null && s.deltaDays>=0 && s.deltaDays<nextDays){
+      nextDays = s.deltaDays;
+      nextItem = (STATE.lang==='ar'?iv.labelAr:iv.labelEn);
+    }
+  });
+  HOUR_INTERVALS.forEach(hi=>{
+    const s = hourStatus(hi, (m.hours||{})[String(hi)], cur, m.hrsPerDay);
+    if(s.state==='over') over++;
+    else if(s.state==='soon') soon++;
+    if(s.foreDays!==null && s.deltaHrs!==null && s.deltaHrs>=0 && s.foreDays<nextDays){
+      nextDays = s.foreDays;
+      nextItem = hi + ' hr';
+    }
+  });
+
+  const faults = STATE.corrective.filter(c=>c.genId===genId);
+  const openF = faults.filter(c=>c.status && c.status!=='closed').length;
+  const downtime = Math.round(faults.reduce((s,c)=>s+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
+
+  const nextLine = nextItem
+    ? `<div class="hint" style="margin-top:10px;">${t('maint_nextdue')}: <b>${nextItem}</b> · ${t('maint_due_in_days',{n:nextDays})}</div>`
+    : '';
+
+  return `
+  <div class="card">
+    <h3>${t('tab_maint')} · ${t('tab_corr')}</h3>
+    <div class="statgrid">
+      <div class="stat"><div class="v" style="color:${over?'var(--bad)':'var(--ok)'}">${over}</div><div class="l">${t('maint_status_over')}</div></div>
+      <div class="stat"><div class="v" style="color:${soon?'var(--gold)':'var(--ok)'}">${soon}</div><div class="l">${t('maint_status_soon')}</div></div>
+      <div class="stat"><div class="v" style="color:${openF?'var(--bad)':'var(--ok)'}">${openF}</div><div class="l">${t('corr_st_open')}</div></div>
+      <div class="stat"><div class="v">${downtime}</div><div class="l">${t('corr_downtime')}</div></div>
+    </div>
+    ${nextLine}
+  </div>`;
+}
+
+function renderDashboard(){
+  if(!STATE.generators.length){
+    return `<div class="empty"><div class="em-ic">📊</div>${t('dash_empty')}</div>`;
+  }
+  if(!STATE.dashGenId) STATE.dashGenId = STATE.generators[0].id;
+  const chips = STATE.generators.map(g=>`<div class="genchip ${STATE.dashGenId===g.id?'active':''}" data-dgen="${g.id}">${g.name}</div>`).join('');
+
+  const readings = STATE.readings.filter(r=>r.genId===STATE.dashGenId).sort((a,b)=> new Date(a.timestamp)-new Date(b.timestamp));
+  const last = readings[readings.length-1];
+
+  let alertCount = 0;
+  readings.slice(-10).forEach(r=>{ alertCount += flagsFor(r).length>0 ? 1 : 0; });
+
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const statCards = last ? `
+    <div class="statgrid">
+      <div class="stat"><div class="v">${last.hours ?? '-'}</div><div class="l">${t('hours_latest')}</div></div>
+      <div class="stat"><div class="v">${last.coolantT||'-'}°C</div><div class="l">${t('coolant_temp')}</div></div>
+      <div class="stat"><div class="v">${last.battV||'-'} V</div><div class="l">${t('battery')}</div></div>
+      <div class="stat"><div class="v">${last.fuel||'-'}%</div><div class="l">${t('fuel')}</div></div>
+    </div>` : `<div class="empty" style="padding:24px 0;">${t('no_readings_gen')}</div>`;
+
+  return `
+  <div class="card">
+    <div class="genpicker">${chips}</div>
+  </div>
+  <div class="card">
+    <h3>${t('latest_status')}</h3>
+    ${statCards}
+    ${readings.length ? `<div class="hint" style="margin-top:10px;">${t('total_logged',{n:readings.length, when:new Date(last.timestamp).toLocaleString(loc)})}</div>` : ''}
+    ${alertCount ? `<div class="flagline">${t('alert_summary',{n:alertCount, m:Math.min(10,readings.length)})}</div>`:''}
+  </div>
+  ${dashServiceCard()}
+  ${readings.length>1 ? `
+  <div class="card">
+    <h3>${t('voltage_trend')}</h3>
+    <div class="chartwrap"><canvas id="chartVoltage"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>${t('coolant_trend')}</h3>
+    <div class="chartwrap"><canvas id="chartTemp"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>${t('hours_trend')}</h3>
+    <div class="chartwrap"><canvas id="chartHours"></canvas></div>
+  </div>
+  ` : `<div class="card"><div class="hint">${t('need_two')}</div></div>`}
+  `;
+}
+
+function bindDashboard(){
+  document.querySelectorAll('[data-dgen]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      STATE.dashGenId = chip.dataset.dgen;
+      render();
+    });
+  });
+}
+
+function drawDashCharts(){
+  const readings = STATE.readings.filter(r=>r.genId===STATE.dashGenId).sort((a,b)=> new Date(a.timestamp)-new Date(b.timestamp));
+  if(readings.length<2) return;
+  const labels = readings.map(r=> new Date(r.timestamp).toLocaleDateString(STATE.lang==='ar'?'ar':undefined,{month:'short',day:'numeric'}));
+
+  Object.values(STATE.charts).forEach(c=>{ if(c) c.destroy(); });
+  STATE.charts = {};
+
+  const vCanvas = document.getElementById('chartVoltage');
+  if(vCanvas){
+    STATE.charts.v = new Chart(vCanvas, {
+      type:'line',
+      data:{ labels, datasets:[
+        {label:'L1', data:readings.map(r=>parseFloat(r.vL1)||null), borderColor:'#1B2A4A', tension:.3, pointRadius:2},
+        {label:'L2', data:readings.map(r=>parseFloat(r.vL2)||null), borderColor:'#C49A2A', tension:.3, pointRadius:2},
+        {label:'L3', data:readings.map(r=>parseFloat(r.vL3)||null), borderColor:'#6B9BD1', tension:.3, pointRadius:2},
+      ]},
+      options: chartOpts()
+    });
+  }
+  const tCanvas = document.getElementById('chartTemp');
+  if(tCanvas){
+    STATE.charts.t = new Chart(tCanvas, {
+      type:'line',
+      data:{ labels, datasets:[
+        {label:t('coolant_temp'), data:readings.map(r=>parseFloat(r.coolantT)||null), borderColor:'#C0392B', backgroundColor:'rgba(192,57,43,0.08)', fill:true, tension:.3, pointRadius:2},
+      ]},
+      options: chartOpts()
+    });
+  }
+  const hCanvas = document.getElementById('chartHours');
+  if(hCanvas){
+    STATE.charts.h = new Chart(hCanvas, {
+      type:'line',
+      data:{ labels, datasets:[
+        {label:t('hours'), data:readings.map(r=>parseFloat(r.hours)||null), borderColor:'#2E7D46', backgroundColor:'rgba(46,125,70,0.08)', fill:true, tension:.2, pointRadius:2},
+      ]},
+      options: chartOpts()
+    });
+  }
+}
+
+function chartOpts(){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ display:true, labels:{ boxWidth:10, font:{size:11} } } },
+    scales:{ x:{ ticks:{font:{size:10}} }, y:{ ticks:{font:{size:10}} } }
+  };
+}
+
+/* ---------- Report datasets (shared by screen + PDF + Excel) ---------- */
+
+// Scheduled-maintenance status for one generator, as of now.
+function maintReportRows(genId){
+  const m = maintDocFor(genId) || {};
+  const cur = latestHoursFor(genId);
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const out = [];
+  TIME_INTERVALS.forEach(iv=>{
+    const rec = (m.time||{})[iv.key];
+    const s = timeStatus(iv, rec);
+    out.push({
+      group: t('maint_time'),
+      interval: STATE.lang==='ar' ? iv.labelAr : iv.labelEn,
+      lastDone: rec&&rec.lastDone ? new Date(rec.lastDone+'T00:00:00').toLocaleDateString(loc) : '—',
+      due: s.nextDue ? s.nextDue.toLocaleDateString(loc) : '—',
+      remaining: s.deltaDays===null ? '—' : (s.deltaDays<0 ? t('maint_overdue_days',{n:Math.abs(s.deltaDays)}) : t('maint_due_in_days',{n:s.deltaDays})),
+      state: s.state
+    });
+  });
+  HOUR_INTERVALS.forEach(hi=>{
+    const rec = (m.hours||{})[String(hi)];
+    const s = hourStatus(hi, rec, cur, m.hrsPerDay);
+    out.push({
+      group: t('maint_hours'),
+      interval: hi + ' hr',
+      lastDone: (rec&&rec.doneAtHrs!==undefined&&rec.doneAtHrs!==null) ? t('maint_at_hrs',{n:rec.doneAtHrs}) : '—',
+      due: (s.nextAtHrs===null ? '' : t('maint_at_hrs',{n:s.nextAtHrs})) +
+           (s.dueDate ? (s.nextAtHrs===null?'':' · ') + s.dueDate.toLocaleDateString(loc) : '') || '—',
+      remaining: s.deltaHrs!==null
+        ? (s.deltaHrs<0 ? t('maint_overdue_hrs',{n:Math.abs(s.deltaHrs)}) : t('maint_due_in_hrs',{n:s.deltaHrs}))
+        : (s.foreDays!==null
+            ? (s.foreDays<0 ? t('maint_overdue_days',{n:Math.abs(s.foreDays)}) : t('maint_due_in_days',{n:s.foreDays}))
+            : '—'),
+      state: s.state
+    });
+  });
+  return out;
+}
+
+// Corrective events for a generator within the selected period.
+function corrReportRows(genId){
+  const from = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportFrom;
+  const to   = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportTo;
+  return STATE.corrective
+    .filter(c => genId==='__all__' ? true : c.genId===genId)
+    .filter(c => { const d = c.date||''; return d >= from && d <= to; })
+    .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+}
+
+// One summary line per generator across the whole fleet.
+function fleetReportRows(){
+  return STATE.generators.map(g=>{
+    const m = maintDocFor(g.id) || {};
+    const cur = latestHoursFor(g.id);
+    let over=0, soon=0;
+    TIME_INTERVALS.forEach(iv=>{
+      const s = timeStatus(iv, (m.time||{})[iv.key]);
+      if(s.state==='over') over++; else if(s.state==='soon') soon++;
+    });
+    HOUR_INTERVALS.forEach(hi=>{
+      const s = hourStatus(hi, (m.hours||{})[String(hi)], cur, m.hrsPerDay);
+      if(s.state==='over') over++; else if(s.state==='soon') soon++;
+    });
+    const readings = STATE.readings.filter(r=>r.genId===g.id);
+    const lastReading = readings.length
+      ? readings.slice().sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp))[0]
+      : null;
+    const faults = STATE.corrective.filter(c=>c.genId===g.id);
+    const openFaults = faults.filter(c=>c.status && c.status!=='closed').length;
+    const downtime = faults.reduce((sum,c)=> sum + (parseFloat(c.downtimeHrs)||0), 0);
+    return {
+      name: g.name, client: g.client,
+      hours: cur===null ? '—' : cur,
+      hrsPerDay: (m.hrsPerDay!==undefined && m.hrsPerDay!==null && m.hrsPerDay!=='') ? m.hrsPerDay : 24,
+      lastReading: lastReading ? new Date(lastReading.timestamp).toLocaleDateString(STATE.lang==='ar'?'ar':undefined) : '—',
+      readingsCount: readings.length,
+      over, soon,
+      openFaults, totalFaults: faults.length,
+      downtime: Math.round(downtime*10)/10
+    };
+  });
+}
+
+// Services actually performed, within the selected period.
+// genId === '__all__' returns the whole fleet.
+function svcLogRows(genId){
+  const from = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportFrom;
+  const to   = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportTo;
+  return STATE.svclog
+    .filter(x => genId==='__all__' ? true : x.genId===genId)
+    .filter(x => { const d = x.date||''; return d >= from && d <= to; })
+    .sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
+}
+
+function svcKindLabel(k){ return k==='time' ? t('svc_kind_time') : t('svc_kind_hours'); }
+
+function renderSvcLogReport(){
+  const all = STATE.reportGenId==='__all__';
+  const g = all ? null : genById(STATE.reportGenId);
+  const rows = svcLogRows(STATE.reportGenId);
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  if(!rows.length){
+    return `<div class="card"><div class="empty"><div class="em-ic">🛠️</div>${t('svc_none')}</div></div>`;
+  }
+  const body = rows.map(x=>{
+    const gg = genById(x.genId);
+    return `<tr>
+      <td>${x.date? new Date(x.date+'T00:00:00').toLocaleDateString(loc):'—'}</td>
+      ${all?`<td>${gg?gg.name:'—'}</td>`:''}
+      <td>${svcKindLabel(x.kind)}</td>
+      <td><b>${x.intervalLabel||x.intervalKey}</b></td>
+      <td>${(x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'—'}</td>
+      <td>${x.by||'—'}</td>
+      <td>${x.backfilled?t('svc_backfilled'):''}</td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:6px;">
+      <h3 style="margin:0;">${all?t('rep_all_gens'):(g?g.name:'')}</h3>
+      <span style="font-size:12px;color:var(--muted);">${rows.length}</span>
+    </div>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr>
+          <th>${t('corr_date')}</th>${all?`<th>${t('f_generator')}</th>`:''}
+          <th>${t('svc_kind')}</th><th>${t('svc_interval')}</th>
+          <th>${t('svc_hours_at')}</th><th>${t('corr_by')}</th><th></th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+  </div>`;
+}
+
+function renderMaintReport(){
+  const g = genById(STATE.reportGenId);
+  const rows = maintReportRows(STATE.reportGenId);
+  const body = rows.map(r=>`<tr>
+      <td>${r.group}</td><td><b>${r.interval}</b></td><td>${r.lastDone}</td><td>${r.due}</td>
+      <td class="${r.state==='over'?'rp-bad':''}">${r.remaining}</td>
+    </tr>`).join('');
+  const over = rows.filter(r=>r.state==='over').length;
+  const soon = rows.filter(r=>r.state==='soon').length;
+  return `
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:6px;">
+      <h3 style="margin:0;">${g?g.name:''}</h3>
+      <span style="font-size:12px;color:var(--muted);">${t('st_over')} ${over} · ${t('st_soon')} ${soon}</span>
+    </div>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr><th>${t('rep_type')}</th><th>${t('maint_interval')}</th><th>${t('maint_lastdone')}</th><th>${t('maint_nextdue')}</th><th>${t('maint_status')}</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+  </div>`;
+}
+
+function renderCorrReport(){
+  const g = genById(STATE.reportGenId);
+  const rows = corrReportRows(STATE.reportGenId);
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  if(!rows.length){
+    return `<div class="card"><div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div></div>`;
+  }
+  const body = rows.map(c=>`<tr>
+      <td>${c.date? new Date(c.date+'T00:00:00').toLocaleDateString(loc):'—'}</td>
+      <td>${corrTypeLabel(c.type||'other')}</td>
+      <td class="${(c.severity==='critical'||c.severity==='high')?'rp-bad':''}">${corrSevLabel(c.severity||'low')}</td>
+      <td>${corrStatusLabel(c.status||'open')}</td>
+      <td>${c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null?c.hoursAtEvent:'—'}</td>
+      <td>${c.description||''}</td>
+      <td>${c.actionTaken||''}</td>
+      <td>${c.partsUsed||''}</td>
+      <td>${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?c.downtimeHrs:'—'}</td>
+    </tr>`).join('');
+  const openN = rows.filter(c=>c.status && c.status!=='closed').length;
+  const downtime = Math.round(rows.reduce((s,c)=>s+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
+  return `
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:6px;">
+      <h3 style="margin:0;">${g?g.name:''}</h3>
+      <span style="font-size:12px;color:var(--muted);">${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${downtime}</span>
+    </div>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr><th>${t('corr_date')}</th><th>${t('corr_type')}</th><th>${t('corr_sev')}</th><th>${t('corr_status')}</th><th>${t('corr_hours')}</th><th>${t('corr_desc')}</th><th>${t('corr_action')}</th><th>${t('corr_parts')}</th><th>${t('corr_downtime')}</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+  </div>`;
+}
+
+function renderFleetReport(){
+  const rows = fleetReportRows();
+  const body = rows.map(r=>`<tr>
+      <td><b>${r.name}</b></td><td>${r.client}</td><td>${r.hours}</td><td>${r.hrsPerDay}</td>
+      <td>${r.lastReading}</td><td>${r.readingsCount}</td>
+      <td class="${r.over?'rp-bad':''}">${r.over}</td><td>${r.soon}</td>
+      <td class="${r.openFaults?'rp-bad':''}">${r.openFaults}</td><td>${r.totalFaults}</td><td>${r.downtime}</td>
+    </tr>`).join('');
+  return `
+  <div class="card">
+    <h3>${t('rep_t_fleet')}</h3>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr>
+          <th>${t('f_generator')}</th><th>${t('rep_client_label')}</th><th>${t('f_hours')}</th><th>${t('maint_hrs_per_day')}</th>
+          <th>${t('rep_last_reading')}</th><th>${t('rep_readings_n')}</th>
+          <th>${t('rep_overdue_svc')}</th><th>${t('rep_soon_svc')}</th>
+          <th>${t('rep_open_faults')}</th><th>${t('rep_total_faults')}</th><th>${t('corr_downtime')}</th>
+        </tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+  </div>`;
+}
+
+/* ================= REPORTS ================= */
+function todayStr(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+}
+
+function renderReports(){
+  if(!STATE.generators.length){
+    return `<div class="empty"><div class="em-ic">📄</div>${t('no_gens')}</div>`;
+  }
+  if(!STATE.reportGenId) STATE.reportGenId = STATE.generators[0].id;
+  if(STATE.reportGenId==='__all__' && !(STATE.reportType==='svclog'||STATE.reportType==='corr')){
+    STATE.reportGenId = STATE.generators[0].id;
+  }
+  if(!STATE.reportDay) STATE.reportDay = todayStr();
+  if(!STATE.reportTo) STATE.reportTo = todayStr();
+  if(!STATE.reportFrom){
+    const d = new Date(); d.setDate(d.getDate()-7);
+    d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+    STATE.reportFrom = d.toISOString().slice(0,10);
+  }
+
+  const allowAll = (STATE.reportType==='svclog' || STATE.reportType==='corr');
+  const genOptions = (allowAll ? `<option value="__all__" ${STATE.reportGenId==='__all__'?'selected':''}>${t('rep_all_gens')}</option>` : '')
+    + STATE.generators.map(g=>`<option value="${g.id}" ${STATE.reportGenId===g.id?'selected':''}>${g.name} · ${g.client}</option>`).join('');
+
+  const periodControls = STATE.reportMode==='day'
+    ? `<label class="req">${t('rep_date')}</label><input type="date" id="rp-day" value="${STATE.reportDay}">`
+    : `<div class="grid2">
+         <div><label class="req">${t('rep_from')}</label><input type="date" id="rp-from" value="${STATE.reportFrom}"></div>
+         <div><label class="req">${t('rep_to')}</label><input type="date" id="rp-to" value="${STATE.reportTo}"></div>
+       </div>`;
+
+  let resultsHtml = '';
+  if(STATE.reportRun){
+    if(STATE.reportType==='readings')      resultsHtml = renderReportResults(readingsForReport());
+    else if(STATE.reportType==='maint')    resultsHtml = renderMaintReport();
+    else if(STATE.reportType==='svclog')   resultsHtml = renderSvcLogReport();
+    else if(STATE.reportType==='corr')     resultsHtml = renderCorrReport();
+    else if(STATE.reportType==='fleet')    resultsHtml = renderFleetReport();
+  }
+
+  const typeChips = [
+    ['readings','rep_t_readings'],
+    ['maint','rep_t_maint'],
+    ['svclog','rep_t_svclog'],
+    ['corr','rep_t_corr'],
+    ['fleet','rep_t_fleet'],
+  ].map(([v,k])=>`<div class="genchip ${STATE.reportType===v?'active':''}" data-rptype="${v}">${t(k)}</div>`).join('');
+
+  // Fleet report covers all generators; others are per-generator
+  const needsGen = STATE.reportType!=='fleet';
+  // Maintenance status is "as of now", so no period needed
+  const needsPeriod = STATE.reportType!=='maint';
+
+  return `
+  <div class="card">
+    <h3>${t('rep_settings')}</h3>
+    <label class="req">${t('rep_type')}</label>
+    <div class="genpicker" style="margin-bottom:10px;">${typeChips}</div>
+
+    ${needsGen ? `<label class="req">${t('f_generator')}</label>
+    <select id="rp-gen">${genOptions}</select>` : ''}
+
+    ${needsPeriod ? `<label class="req" style="margin-top:14px;">${t('rep_period')}</label>
+    <div class="genpicker" style="margin-bottom:8px;">
+      <div class="genchip ${STATE.reportMode==='day'?'active':''}" data-rpmode="day">${t('rep_single')}</div>
+      <div class="genchip ${STATE.reportMode==='range'?'active':''}" data-rpmode="range">${t('rep_range')}</div>
+    </div>
+    ${periodControls}` : ''}
+
+    <button class="btn btn-primary" id="rp-run">${t('rep_generate')}</button>
+    <button class="btn btn-outline" id="rp-backup" style="margin-top:8px;">${t('rep_backup')}</button>
+  </div>
+  ${resultsHtml}
+  `;
+}
+
+function fmtDateShort(iso){
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const d = new Date(iso);
+  return d.toLocaleDateString(loc,{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString(loc,{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderReportResults(rows){
+  const g = genById(STATE.reportGenId);
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const periodLabel = STATE.reportMode==='day'
+    ? new Date(STATE.reportDay+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'long',day:'numeric'})
+    : `${new Date(STATE.reportFrom+'T00:00:00').toLocaleDateString(loc)} → ${new Date(STATE.reportTo+'T00:00:00').toLocaleDateString(loc)}`;
+
+  if(!rows.length){
+    return `<div class="card"><h3>${g?g.name:''} · ${periodLabel}</h3>
+      <div class="empty" style="padding:24px 0;">${t('rep_none')}</div></div>`;
+  }
+
+  const flaggedCount = rows.filter(r=>flagsFor(r).length>0).length;
+
+  const cols = [
+    ['when',t('col_when')], ['hours',t('col_hrs')], ['load',t('col_kw')],
+    ['vL1',t('col_vl1')], ['vL2',t('col_vl2')], ['vL3',t('col_vl3')], ['freq',t('col_hz')],
+    ['coolantT',t('col_cool')], ['oilP',t('col_oilp')], ['battV',t('col_batt')], ['fuel',t('col_fuel')],
+  ];
+  const headCells = cols.map(([k,label])=>`<th>${label}</th>`).join('');
+  const bodyRows = rows.map(r=>{
+    const bad = outOfRangeKeys(r);
+    const cells = cols.map(([k,label])=>{
+      if(k==='when') return `<td class="rp-when">${fmtDateShort(r.timestamp)}</td>`;
+      const v = (r[k]===undefined||r[k]==='') ? '–' : r[k];
+      const cls = bad.has(k) ? ' class="rp-bad"' : '';
+      return `<td${cls}>${v}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  return `
+  <div class="card">
+    <div class="rowbetween" style="align-items:flex-start;">
+      <div>
+        <h3 style="margin-bottom:2px;">${g?g.name:''} <span class="badge ${g&&g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${g?g.client:''}</span></h3>
+        <div style="font-size:12.5px;color:var(--muted);">${periodLabel}</div>
+      </div>
+    </div>
+    <div class="statgrid" style="margin:12px 0;">
+      <div class="stat"><div class="v">${rows.length}</div><div class="l">${t('rep_readings')}</div></div>
+      <div class="stat"><div class="v" style="color:${flaggedCount?'var(--bad)':'var(--ok)'}">${flaggedCount}</div><div class="l">${t('rep_with_oor')}</div></div>
+    </div>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:8px;">${t('rep_hint')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+    <button class="btn btn-outline" id="rp-export" style="margin-top:8px;">${t('rep_export')}</button>
+  </div>
+  `;
+}
+
+function bindReports(){
+  document.querySelectorAll('[data-rptype]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ STATE.reportType = chip.dataset.rptype; STATE.reportRun=false; render(); });
+  });
+
+  const genSel = document.getElementById('rp-gen');
+  if(genSel) genSel.addEventListener('change', ()=>{ STATE.reportGenId = genSel.value; STATE.reportRun=false; render(); });
+
+  document.querySelectorAll('[data-rpmode]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ STATE.reportMode = chip.dataset.rpmode; STATE.reportRun=false; render(); });
+  });
+
+  const day = document.getElementById('rp-day');
+  if(day) day.addEventListener('change', ()=>{ STATE.reportDay = day.value; });
+  const from = document.getElementById('rp-from');
+  if(from) from.addEventListener('change', ()=>{ STATE.reportFrom = from.value; });
+  const to = document.getElementById('rp-to');
+  if(to) to.addEventListener('change', ()=>{ STATE.reportTo = to.value; });
+
+  const runBtn = document.getElementById('rp-run');
+  if(runBtn) runBtn.addEventListener('click', ()=>{
+    if(STATE.reportMode==='range' && STATE.reportFrom && STATE.reportTo && STATE.reportFrom > STATE.reportTo){
+      showToast(t('warn_daterange'));
+      return;
+    }
+    STATE.reportRun = true;
+    render();
+  });
+
+  const exportBtn = document.getElementById('rp-export');
+  if(exportBtn) exportBtn.addEventListener('click', exportReportCSV);
+  const pdfBtn = document.getElementById('rp-pdf');
+  if(pdfBtn) pdfBtn.addEventListener('click', exportReportPDF);
+  const xlsxBtn = document.getElementById('rp-xlsx');
+  if(xlsxBtn) xlsxBtn.addEventListener('click', exportReportXLSX);
+  const backupBtn = document.getElementById('rp-backup');
+  if(backupBtn) backupBtn.addEventListener('click', exportFullBackup);
+}
+
+// Report columns shared by Excel + PDF (key, EN label, AR label)
+const REPORT_COLS = [
+  ['timestamp','Date / Time','التاريخ / الوقت'],
+  ['tech','Technician','الفني'],
+  ['hours','Hours','ساعات'],
+  ['load','Load kW','الحِمل'],
+  ['vL1','V L1','ج L1'], ['vL2','V L2','ج L2'], ['vL3','V L3','ج L3'],
+  ['freq','Freq Hz','التردد'],
+  ['iL1','A L1','ت L1'], ['iL2','A L2','ت L2'], ['iL3','A L3','ت L3'],
+  ['oilP','Oil bar','ضغط الزيت'], ['oilT','Oil °C','حرارة الزيت'],
+  ['coolantT','Cool °C','المبرّد'], ['battV','Batt V','البطارية'], ['fuel','Fuel %','الوقود'],
+  ['notes','Notes','ملاحظات'],
+];
+
+function reportPeriodLabel(){
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  return STATE.reportMode==='day'
+    ? new Date(STATE.reportDay+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'long',day:'numeric'})
+    : `${new Date(STATE.reportFrom+'T00:00:00').toLocaleDateString(loc)} → ${new Date(STATE.reportTo+'T00:00:00').toLocaleDateString(loc)}`;
+}
+
+function exportReportCSV(){
+  const rt = buildReportTable();
+  if(rt.empty){ showToast(t('warn_nothing')); return; }
+  const esc = v => {
+    const s2 = (v===undefined||v===null) ? '' : String(v);
+    return /[",\n]/.test(s2) ? '"'+s2.replace(/"/g,'""')+'"' : s2;
+  };
+  const lines = [];
+  lines.push(rt.headers.map(esc).join(','));
+  rt.body.forEach(r=>lines.push(r.map(esc).join(',')));
+  const csv = '\ufeff' + lines.join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = reportFileSlug(rt)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('rep_exported'));
+}
+
+/* ---------- Unified report table builder (used by screen exports) ---------- */
+function buildReportTable(){
+  const bi = STATE.lang==='ar';
+  const g = genById(STATE.reportGenId);
+  const loc = bi ? 'ar' : undefined;
+  const type = STATE.reportType || 'readings';
+
+  if(type==='readings'){
+    const rows = readingsForReport();
+    const headers = REPORT_COLS.map(c=> bi ? `${c[1]} / ${c[2]}` : c[1]).concat([bi?'خارج النطاق / Flags':'Flags']);
+    const body=[], bad=[];
+    rows.forEach(r=>{
+      const oor = outOfRangeKeys(r);
+      const line = REPORT_COLS.map(c=>{
+        if(c[0]==='timestamp') return new Date(r.timestamp).toLocaleString(loc);
+        const v = r[c[0]];
+        return (v===undefined||v===null||v==='') ? '' : v;
+      });
+      const mask = REPORT_COLS.map(c=> oor.has(c[0]));
+      line.push(flagsFor(r).join('; ')); mask.push(false);
+      body.push(line); bad.push(mask);
+    });
+    const flagged = rows.filter(r=>flagsFor(r).length>0).length;
+    return { type, headers, body, bad,
+      title: bi ? 'تقرير قراءات المولّد · Generator Reading Report' : 'Generator Reading Report',
+      subject: g?g.name:'', client: g?g.client:'',
+      period: reportPeriodLabel(), landscape: true,
+      summary: `${bi?'إجمالي القراءات':'Total readings'}: ${rows.length} · ${bi?'قراءات خارج النطاق':'With out-of-range values'}: ${flagged}`,
+      empty: rows.length===0 };
+  }
+
+  if(type==='maint'){
+    const rows = maintReportRows(STATE.reportGenId);
+    const headers = [t('rep_type'), t('maint_interval'), t('maint_lastdone'), t('maint_nextdue'), t('maint_status')];
+    const body = rows.map(r=>[r.group, r.interval, r.lastDone, r.due, r.remaining]);
+    const bad  = rows.map(r=>[false,false,false,false, r.state==='over']);
+    const over = rows.filter(r=>r.state==='over').length;
+    const soon = rows.filter(r=>r.state==='soon').length;
+    return { type, headers, body, bad,
+      title: bi ? 'تقرير الصيانة الدورية · Scheduled Maintenance Report' : 'Scheduled Maintenance Report',
+      subject: g?g.name:'', client: g?g.client:'',
+      period: bi ? 'حتى تاريخه' : 'As of today', landscape: false,
+      summary: `${bi?'متأخر':'Overdue'}: ${over} · ${bi?'قريبًا':'Due soon'}: ${soon}`,
+      empty: rows.length===0 };
+  }
+
+  if(type==='svclog'){
+    const all = STATE.reportGenId==='__all__';
+    const rows = svcLogRows(STATE.reportGenId);
+    const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
+      .concat([t('svc_kind'), t('svc_interval'), t('svc_hours_at'), t('corr_by'), t('svc_backfilled')]);
+    const body = rows.map(x=>{
+      const gg = genById(x.genId);
+      return [x.date ? new Date(x.date+'T00:00:00').toLocaleDateString(loc) : '']
+        .concat(all?[gg?gg.name:'']:[])
+        .concat([svcKindLabel(x.kind), x.intervalLabel||x.intervalKey,
+                 (x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'',
+                 x.by||'', x.backfilled?'✓':'']);
+    });
+    const bad = rows.map(()=> headers.map(()=>false));
+    return { type, headers, body, bad,
+      title: bi ? 'سجل الصيانات المنفّذة · Service History Report' : 'Service History Report',
+      subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
+      period: reportPeriodLabel(), landscape: true,
+      summary: `${bi?'عدد الصيانات المنفّذة':'Services performed'}: ${rows.length}`,
+      empty: rows.length===0 };
+  }
+
+  if(type==='corr'){
+    const all = STATE.reportGenId==='__all__';
+    const rows = corrReportRows(STATE.reportGenId);
+    const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
+      .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
+               t('corr_desc'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_by')]);
+    const body = rows.map(c=>{
+      const gg = genById(c.genId);
+      return [c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc) : '']
+        .concat(all?[gg?gg.name:'']:[])
+        .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
+                 (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
+                 c.description||'', c.actionTaken||'', c.partsUsed||'',
+                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.by||'']);
+    });
+    const sevIdx = all ? 3 : 2;
+    const bad = rows.map(c=> headers.map((h,i)=> i===sevIdx && (c.severity==='critical'||c.severity==='high')));
+    const openN = rows.filter(c=>c.status && c.status!=='closed').length;
+    const dt = Math.round(rows.reduce((s2,c)=>s2+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
+    return { type, headers, body, bad,
+      title: bi ? 'تقرير الأعطال والإصلاحات · Corrective Maintenance Report' : 'Corrective Maintenance Report',
+      subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
+      period: reportPeriodLabel(), landscape: true,
+      summary: `${bi?'عدد السجلات':'Records'}: ${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${dt}`,
+      empty: rows.length===0 };
+  }
+
+  // fleet
+  const rows = fleetReportRows();
+  const headers = [t('f_generator'), t('rep_client_label'), t('f_hours'), t('maint_hrs_per_day'),
+                   t('rep_last_reading'), t('rep_readings_n'), t('rep_overdue_svc'), t('rep_soon_svc'),
+                   t('rep_open_faults'), t('rep_total_faults'), t('corr_downtime')];
+  const body = rows.map(r=>[r.name,r.client,r.hours,r.hrsPerDay,r.lastReading,r.readingsCount,r.over,r.soon,r.openFaults,r.totalFaults,r.downtime]);
+  const bad  = rows.map(r=>[false,false,false,false,false,false,!!r.over,false,!!r.openFaults,false,false]);
+  const totOver = rows.reduce((s2,r)=>s2+r.over,0);
+  const totOpen = rows.reduce((s2,r)=>s2+r.openFaults,0);
+  return { type:'fleet', headers, body, bad,
+    title: bi ? 'ملخص الأسطول · Fleet Summary Report' : 'Fleet Summary Report',
+    subject: bi?'كل المولّدات':'All generators', client: '',
+    period: bi?'حتى تاريخه':'As of today', landscape: true,
+    summary: `${bi?'مولّدات':'Generators'}: ${rows.length} · ${bi?'صيانة متأخرة':'Overdue services'}: ${totOver} · ${bi?'أعطال مفتوحة':'Open faults'}: ${totOpen}`,
+    empty: rows.length===0 };
+}
+
+// One-tap backup: every collection exported as a separate sheet in one workbook.
+function exportFullBackup(){
+  if(typeof XLSX==='undefined'){ showToast('⚠️ Excel library not loaded'); return; }
+  const wb = XLSX.utils.book_new();
+  const nameOf = id => { const g = genById(id); return g ? g.name : id; };
+
+  const gens = [['id','name','client']].concat(
+    STATE.generators.map(g=>[g.id, g.name, g.client||'']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gens), 'Generators');
+
+  const rHead = ['generator','timestamp','tech','hours','load','rpm','vL1','vL2','vL3','freq','iL1','iL2','iL3','oilP','oilT','coolantT','battV','fuel','notes'];
+  const reads = [rHead].concat(STATE.readings
+    .slice().sort((a,b)=> String(a.timestamp).localeCompare(String(b.timestamp)))
+    .map(r=>[nameOf(r.genId), r.timestamp||'', r.tech||''].concat(
+      ['hours','load','rpm','vL1','vL2','vL3','freq','iL1','iL2','iL3','oilP','oilT','coolantT','battV','fuel','notes']
+        .map(k=> (r[k]===undefined||r[k]===null)?'':r[k]))));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(reads), 'Readings');
+
+  const svc = [['generator','date','kind','interval','hoursAtService','by','backfilled']].concat(
+    STATE.svclog.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')))
+      .map(x=>[nameOf(x.genId), x.date||'', x.kind||'', x.intervalLabel||x.intervalKey||'',
+               (x.hoursAtService===undefined||x.hoursAtService===null)?'':x.hoursAtService,
+               x.by||'', x.backfilled?'yes':'']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(svc), 'ServiceHistory');
+
+  const corr = [['generator','date','type','severity','status','hoursAtEvent','description','actionTaken','partsUsed','downtimeHrs','by','closedDate']].concat(
+    STATE.corrective.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')))
+      .map(c=>[nameOf(c.genId), c.date||'', c.type||'', c.severity||'', c.status||'',
+               (c.hoursAtEvent===undefined||c.hoursAtEvent===null)?'':c.hoursAtEvent,
+               c.description||'', c.actionTaken||'', c.partsUsed||'',
+               (c.downtimeHrs===undefined||c.downtimeHrs===null)?'':c.downtimeHrs,
+               c.by||'', c.closedDate||'']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(corr), 'Faults');
+
+  // Current maintenance baselines (what each schedule is counting from)
+  const base = [['generator','kind','interval','lastDone/doneAtHrs','date','hrsPerDay']];
+  STATE.maintenance.forEach(m=>{
+    const nm = nameOf(m.id);
+    TIME_INTERVALS.forEach(iv=>{
+      const rec = (m.time||{})[iv.key];
+      if(rec) base.push([nm,'time',iv.labelEn, rec.doneAtHrs??'', rec.lastDone||'', m.hrsPerDay??'']);
+    });
+    Object.keys(m.hours||{}).forEach(k=>{
+      const rec = m.hours[k];
+      base.push([nm,'hours',k+' hr', rec.doneAtHrs??'', rec.date||'', m.hrsPerDay??'']);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(base), 'MaintBaselines');
+
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `EnvironmSafe_FULL_BACKUP_${stamp}.xlsx`);
+  showToast(t('rep_backup_done'));
+}
+
+function reportFileSlug(rt){
+  const base = (rt.subject||'report').replace(/[^a-z0-9]+/gi,'_');
+  const per = STATE.reportMode==='day' ? STATE.reportDay : `${STATE.reportFrom}_to_${STATE.reportTo}`;
+  return `EnvironmSafe_${rt.type}_${base}_${per}`;
+}
+
+function exportReportXLSX(){
+  if(typeof XLSX==='undefined'){ showToast('\u26a0\ufe0f Excel library not loaded'); return; }
+  const rt = buildReportTable();
+  if(rt.empty){ showToast(t('warn_nothing')); return; }
+  const aoa = [];
+  aoa.push([rt.title]);
+  aoa.push(['EnvironmSafe \u2014 Engineering, Trading & Services Ltd.  \u00b7  +967 78 340 2932  \u00b7  www.environmsafe.com']);
+  aoa.push([`${t('rep_gen_label')}: ${rt.subject}`, '', rt.client?`${t('rep_client_label')}: ${rt.client}`:'']);
+  aoa.push([`${t('rep_period_label')}: ${rt.period}`, '', `${t('rep_printed')}: ${new Date().toLocaleDateString()}`]);
+  aoa.push([rt.summary]);
+  aoa.push([]);
+  aoa.push(rt.headers);
+  rt.body.forEach(r=>aoa.push(r));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = rt.headers.map((h,i)=>({wch: i===0?18: Math.min(30, Math.max(11, String(h).length+4))}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Report');
+  XLSX.writeFile(wb, reportFileSlug(rt)+'.xlsx');
+  showToast(t('rep_exported'));
+}
+
+const REPORT_LOGO_B64 = "data:image/png;base64,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";
+
+function exportReportPDF(){
+  const rt = buildReportTable();
+  if(rt.empty){ showToast(t('warn_nothing')); return; }
+  const bi = STATE.lang==='ar';
+  const dir = bi ? 'rtl' : 'ltr';
+  const loc = bi ? 'ar' : undefined;
+
+  const headCells = rt.headers.map(h=>`<th>${h}</th>`).join('');
+  const bodyRows = rt.body.map((row,ri)=>{
+    const tds = row.map((v,ci)=>{
+      const cls = (rt.bad[ri] && rt.bad[ri][ci]) ? ' class="bad"' : '';
+      const val = (v===undefined||v===null||v==='') ? '\u2013' : v;
+      return `<td${cls}>${val}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="${bi?'ar':'en'}" dir="${dir}"><head><meta charset="utf-8">
+  <title>EnvironmSafe Report</title>
+  <style>
+    @page { size: A4 ${rt.landscape?'landscape':'portrait'}; margin: 10mm; }
+    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1E2430;margin:0;}
+    .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #C49A2A;padding-bottom:10px;margin-bottom:6px;}
+    .hdr img{height:52px;}
+    .hdr .t{font-size:17px;font-weight:800;color:#1B2A4A;}
+    .hdr .s{font-size:10.5px;color:#6B7280;}
+    .meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:11px;margin:8px 0 4px;color:#1B2A4A;font-weight:600;}
+    .sum{font-size:11px;margin-bottom:8px;color:#6B7280;}
+    table{border-collapse:collapse;width:100%;font-size:9.5px;}
+    th{background:#1B2A4A;color:#fff;padding:5px 4px;text-align:${bi?'right':'left'};font-weight:700;border:0.5px solid #1B2A4A;}
+    td{padding:4px;border:0.5px solid #C9CED6;text-align:${bi?'right':'left'};vertical-align:top;}
+    tr:nth-child(even) td{background:#F7F8FA;}
+    td.bad{background:#FDECEA;color:#C0392B;font-weight:800;}
+    .foot{margin-top:12px;font-size:9px;color:#6B7280;display:flex;justify-content:space-between;border-top:1px solid #E4E7EC;padding-top:6px;}
+    @media print{.noprint{display:none;}}
+    .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
+  </style></head><body>
+    <button class="noprint" onclick="window.print()">${bi?'\ud83d\udda8 طباعة / حفظ PDF':'\ud83d\udda8 Print / Save PDF'}</button>
+    <div class="hdr">
+      <img src="${REPORT_LOGO_B64}" alt="logo">
+      <div>
+        <div class="t">${rt.title}</div>
+        <div class="s">EnvironmSafe \u2014 Engineering, Trading &amp; Services Ltd.  \u00b7  +967 78 340 2932  \u00b7  www.environmsafe.com</div>
+      </div>
+    </div>
+    <div class="meta">
+      <span>${t('rep_gen_label')}: <b>${rt.subject}</b>${rt.client?` &nbsp; ${t('rep_client_label')}: <b>${rt.client}</b>`:''}</span>
+      <span>${t('rep_period_label')}: <b>${rt.period}</b></span>
+      <span>${t('rep_printed')}: <b>${new Date().toLocaleDateString(loc)}</b></span>
+    </div>
+    <div class="sum">${rt.summary}</div>
+    <table><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>
+    <div class="foot">
+      <span>${bi?'إعداد':'Prepared by'}: ______________________</span>
+      <span>${bi?'اعتماد المشرف':'Supervisor sign-off'}: ______________________</span>
+      <span>\u00a9 EnvironmSafe</span>
+    </div>
+    <script>setTimeout(function(){window.print();}, 400);<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ showToast(bi?'\u26a0\ufe0f اسمح بالنوافذ المنبثقة':'\u26a0\ufe0f Allow pop-ups to export PDF'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  showToast(t('rep_exported'));
+}
+
+/* ================= MAINTENANCE (time-based #4 + hours-based #5) ================= */
+// Maintenance doc shape (per generator, id = genId):
+//   { hrsPerDay: number|null,
+//     time: { weekly:{lastDone:ISOdate, by}, q3:{...}, ... },
+//     hours:{ '125':{doneAtHrs:number, date:ISO, by}, '250':{...}, ... } }
+
+function timeStatus(interval, rec){
+  // returns {state:'ok'|'soon'|'over'|'never', nextDue:Date|null, deltaDays:number|null}
+  if(!rec || !rec.lastDone) return { state:'never', nextDue:null, deltaDays:null };
+  const nextDue = addDays(rec.lastDone, interval.days);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const nd = new Date(nextDue); nd.setHours(0,0,0,0);
+  const delta = daysBetween(today, nd); // +ve = days remaining
+  // "Soon" window scales with interval length: weekly warns ~2d ahead, yearly ~14d ahead.
+  const soonWindow = Math.max(TIME_SOON_DAYS, Math.round(interval.days * 0.04));
+  let state = 'ok';
+  if(delta < 0) state = 'over';
+  else if(delta <= soonWindow) state = 'soon';
+  return { state, nextDue:nd, deltaDays:delta };
+}
+
+function hourStatus(intervalHrs, rec, currentHrs, hrsPerDay){
+  // rec = { doneAtHrs, date, by }
+  // Default to 24 h/day (runs 24/7) unless a specific schedule is set.
+  const perDay = (hrsPerDay && hrsPerDay>0) ? hrsPerDay : 24;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Due DATE is anchored to the last service DATE when we have one:
+  //   dueDate = lastServiceDate + (interval hrs / hrs per day)
+  // e.g. 250 hr interval at 17 h/day = 14.7 days after the last service.
+  // Only if no service date is recorded do we fall back to projecting from today.
+  let dueDate = null, dueFromDate = false;
+  if(rec && rec.date){
+    const d = new Date(rec.date + 'T00:00:00');
+    if(!isNaN(d.getTime())){
+      d.setDate(d.getDate() + Math.round(intervalHrs / perDay));
+      d.setHours(0,0,0,0);
+      dueDate = d; dueFromDate = true;
+    }
+  }
+  const daysToDue = dueDate ? daysBetween(today, dueDate) : null;
+
+  if(currentHrs===null){
+    // No hours reading yet — we can still show a date-based schedule if we have a baseline date.
+    let state = 'nohrs';
+    if(dueFromDate) state = daysToDue < 0 ? 'over' : (daysToDue <= Math.max(1, Math.round(HOUR_SOON_HRS/perDay)) ? 'soon' : 'ok');
+    return { state, nextAtHrs:null, deltaHrs:null, foreDays:daysToDue, dueDate, dueFromDate };
+  }
+
+  const baseHrs = (rec && rec.doneAtHrs!==undefined && rec.doneAtHrs!==null) ? rec.doneAtHrs : 0;
+  const nextAtHrs = baseHrs + intervalHrs;
+  const deltaHrs = Math.round((nextAtHrs - currentHrs)*10)/10; // +ve = hours remaining
+
+  if(!dueFromDate){
+    // No service date recorded: project the due date forward from today.
+    const fd = Math.round(deltaHrs / perDay);
+    const d = new Date(today); d.setDate(d.getDate() + fd);
+    dueDate = d;
+    return { state: deltaHrs<0 ? 'over' : (deltaHrs<=HOUR_SOON_HRS ? 'soon' : 'ok'),
+             nextAtHrs, deltaHrs, foreDays: fd, dueDate, dueFromDate:false };
+  }
+
+  // We have both a date baseline and an hours reading.
+  // Treat the service as due when EITHER the scheduled date has arrived OR the hours are reached,
+  // so a stale hours reading can never hide an overdue service.
+  const soonDays = Math.max(1, Math.round(HOUR_SOON_HRS / perDay));
+  let state = 'ok';
+  if(deltaHrs < 0 || daysToDue < 0) state = 'over';
+  else if(deltaHrs <= HOUR_SOON_HRS || daysToDue <= soonDays) state = 'soon';
+  return { state, nextAtHrs, deltaHrs, foreDays: daysToDue, dueDate, dueFromDate:true };
+}
+
+function statusDot(state){
+  if(state==='over') return '<span class="dot dot-bad"></span>';
+  if(state==='soon') return '<span class="dot dot-warn"></span>';
+  if(state==='ok') return '<span class="dot dot-ok"></span>';
+  return '<span class="dot" style="background:var(--border)"></span>';
+}
+
+function fleetMaintCounts(){
+  // count how many intervals across all generators are over/soon
+  let over=0, soon=0;
+  STATE.generators.forEach(g=>{
+    const m = maintDocFor(g.id) || {};
+    TIME_INTERVALS.forEach(iv=>{
+      const s = timeStatus(iv, (m.time||{})[iv.key]);
+      if(s.state==='over') over++; else if(s.state==='soon') soon++;
+    });
+    const cur = latestHoursFor(g.id);
+    HOUR_INTERVALS.forEach(hi=>{
+      const s = hourStatus(hi, (m.hours||{})[String(hi)], cur, m.hrsPerDay);
+      if(s.state==='over') over++; else if(s.state==='soon') soon++;
+    });
+  });
+  return { over, soon };
+}
+
+function renderMaintenance(){
+  if(!STATE.generators.length){
+    return `<div class="empty"><div class="em-ic">🛠️</div>${t('no_gens')}</div>`;
+  }
+  if(!STATE.maintGenId || !genById(STATE.maintGenId)) STATE.maintGenId = STATE.generators[0].id;
+  const g = genById(STATE.maintGenId);
+  const m = maintDocFor(g.id) || {};
+  const cur = latestHoursFor(g.id);
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+
+  const counts = fleetMaintCounts();
+  const summary = (counts.over||counts.soon) ? `
+    <div class="card" style="padding:12px 16px;">
+      <div style="font-size:13.5px;font-weight:600;">
+        ${counts.over? `${t('st_over')} ${counts.over} ${t('maint_status_over')}` : ''}
+        ${counts.over&&counts.soon? ' · ':''}
+        ${counts.soon? `${t('st_soon')} ${counts.soon} ${t('maint_status_soon')}` : ''}
+      </div>
+    </div>` : '';
+
+  const chips = STATE.generators.map(gg=>`<div class="genchip ${STATE.maintGenId===gg.id?'active':''}" data-mgen="${gg.id}">${gg.name}</div>`).join('');
+
+  // Time-based rows
+  const timeRows = TIME_INTERVALS.map(iv=>{
+    const rec = (m.time||{})[iv.key];
+    const s = timeStatus(iv, rec);
+    const label = STATE.lang==='ar' ? iv.labelAr : iv.labelEn;
+    let due = t('maint_never');
+    if(s.state!=='never'){
+      const dd = s.deltaDays;
+      const when = s.nextDue ? s.nextDue.toLocaleDateString(loc,{month:'short',day:'numeric',year:'numeric'}) : '';
+      let rel = '';
+      if(dd<0) rel = t('maint_overdue_days',{n:Math.abs(dd)});
+      else if(dd===0) rel = t('maint_due_today');
+      else rel = t('maint_due_in_days',{n:dd});
+      due = `${when}<br><span style="font-size:11px;color:var(--muted)">${rel}</span>`;
+    }
+    const last = rec&&rec.lastDone ? new Date(rec.lastDone).toLocaleDateString(loc,{month:'short',day:'numeric',year:'numeric'}) : t('maint_never');
+    return `<tr>
+      <td>${statusDot(s.state)} <b>${label}</b></td>
+      <td>${last}</td>
+      <td>${due}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" data-mdone-time="${iv.key}">${t('maint_mark_done')}</button>
+        <button class="btn btn-outline btn-sm" data-medit-time="${iv.key}" style="margin-top:4px;">${t('maint_edit')}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Hours-based rows
+  const loc2 = STATE.lang==='ar' ? 'ar' : undefined;
+  const hoursRows = HOUR_INTERVALS.map(hi=>{
+    const rec = (m.hours||{})[String(hi)];
+    const s = hourStatus(hi, rec, cur, m.hrsPerDay);
+    let dueHrs = t('maint_no_hours');
+    let dueDate = t('maint_never');
+    if(s.deltaHrs!==null){
+      const dh = s.deltaHrs;
+      const rel = dh<0 ? t('maint_overdue_hrs',{n:Math.abs(dh)}) : t('maint_due_in_hrs',{n:dh});
+      dueHrs = `${t('maint_at_hrs',{n:s.nextAtHrs})}<br><span style="font-size:11px;color:var(--muted)">${rel}</span>`;
+    }
+    if(s.dueDate){
+      const dstr = s.dueDate.toLocaleDateString(loc2,{year:'numeric',month:'short',day:'numeric'});
+      let relD = '';
+      if(s.foreDays!==null){
+        if(s.foreDays < 0) relD = t('maint_overdue_days',{n:Math.abs(s.foreDays)});
+        else if(s.foreDays === 0) relD = t('maint_due_today');
+        else relD = t('maint_due_in_days',{n:s.foreDays});
+      }
+      dueDate = `${dstr}${relD?`<br><span style="font-size:11px;color:var(--muted)">${relD}</span>`:''}`;
+    }
+    const lastHrs = rec&&rec.doneAtHrs!==undefined&&rec.doneAtHrs!==null ? t('maint_at_hrs',{n:rec.doneAtHrs}) : t('maint_never');
+    const lastDateStr = rec&&rec.date ? `<br><span style="font-size:11px;color:var(--muted)">${new Date(rec.date).toLocaleDateString(loc2,{month:'short',day:'numeric',year:'numeric'})}</span>` : '';
+    return `<tr>
+      <td>${statusDot(s.state)} <b>${hi} hr</b></td>
+      <td>${lastHrs}${lastDateStr}</td>
+      <td>${dueHrs}</td>
+      <td>${dueDate}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" data-mdone-hr="${hi}">${t('maint_mark_done')}</button>
+        <button class="btn btn-outline btn-sm" data-medit-hr="${hi}" style="margin-top:4px;">${t('maint_edit')}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const curHrsLine = cur!==null ? t('maint_current_hrs',{n:cur}) : t('maint_no_hours');
+
+  return `
+  ${summary}
+  <div class="card">
+    <div class="genpicker">${chips}</div>
+  </div>
+
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:10px;">
+      <h3 style="margin:0;">${g.name} <span class="badge ${g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${g.client}</span></h3>
+    </div>
+    <div class="hint" style="margin-bottom:4px;">${curHrsLine}</div>
+    <label style="margin-top:8px;">${t('maint_hrs_per_day')} <span class="unit">${t('maint_hrs_per_day_hint')}</span></label>
+    <input type="number" step="0.5" min="0" max="24" id="m-hrsperday" value="${m.hrsPerDay!==undefined&&m.hrsPerDay!==null?m.hrsPerDay:''}" placeholder="24">
+    <div class="hint" style="margin-top:4px;">${t('maint_hrs_per_day_note')}</div>
+  </div>
+
+  <div class="card">
+    <h3>${t('maint_time')}</h3>
+    <div class="rp-tablewrap">
+      <table class="rp-table maint-table">
+        <thead><tr><th>${t('maint_interval')}</th><th>${t('maint_lastdone')}</th><th>${t('maint_nextdue')}</th><th></th></tr></thead>
+        <tbody>${timeRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>${t('maint_hours')}</h3>
+    <div class="rp-tablewrap">
+      <table class="rp-table maint-table">
+        <thead><tr><th>${t('maint_interval')}</th><th>${t('maint_lastdone')}</th><th>${t('maint_due_hrs_col')}</th><th>${t('maint_due_date_col')}</th><th></th></tr></thead>
+        <tbody>${hoursRows}</tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:8px;">${t('maint_nest_note')}</div>
+    <div class="hint" style="margin-top:4px;">${t('maint_setup_hint')}</div>
+  </div>
+  ${recentServicesCard(g.id)}
+  `;
+}
+
+// Compact list of the most recent services performed on this generator (audit trail)
+function recentServicesCard(genId){
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const rows = STATE.svclog
+    .filter(x=>x.genId===genId)
+    .sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')))
+    .slice(0,10);
+  if(!rows.length) return '';
+  const items = rows.map(x=>`<tr>
+      <td>${x.date? new Date(x.date+'T00:00:00').toLocaleDateString(loc):'—'}</td>
+      <td><b>${x.intervalLabel||x.intervalKey}</b><br><span style="font-size:11px;color:var(--muted)">${svcKindLabel(x.kind)}</span></td>
+      <td>${(x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'—'}</td>
+      <td>${x.by||'—'}${x.backfilled?`<br><span style="font-size:10px;color:var(--muted)">${t('svc_backfilled')}</span>`:''}</td>
+      <td><button class="btn btn-outline btn-sm" data-svcdel="${x.id}">${t('corr_delete')}</button></td>
+    </tr>`).join('');
+  return `
+  <div class="card">
+    <h3>${t('svc_recent')}</h3>
+    <div class="rp-tablewrap">
+      <table class="rp-table maint-table">
+        <thead><tr><th>${t('corr_date')}</th><th>${t('svc_interval')}</th><th>${t('svc_hours_at')}</th><th>${t('corr_by')}</th><th></th></tr></thead>
+        <tbody>${items}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// Append a permanent, dated record of a service that was performed.
+// This is the audit trail — the maintenance doc only holds the LATEST baseline.
+async function logServicePerformed(genId, entries){
+  // entries: [{ kind:'time'|'hours', key, label, date, hoursAtService, by, backfilled }]
+  try{
+    const batch = db.batch ? null : null; // simple sequential adds (small counts)
+    for(const e of entries){
+      await db.collection(SVCLOG_COLLECTION).add({
+        genId,
+        kind: e.kind,
+        intervalKey: String(e.key),
+        intervalLabel: e.label,
+        date: e.date,
+        hoursAtService: (e.hoursAtService===undefined || e.hoursAtService==='') ? null : e.hoursAtService,
+        by: e.by || '',
+        backfilled: !!e.backfilled,
+        savedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    return true;
+  }catch(err){
+    console.warn('service log write failed', err);
+    return false; // non-fatal: the schedule baseline still saved
+  }
+}
+
+async function saveMaintDoc(genId, patch){  // merge patch into the maintenance doc for this generator
+  try{
+    await db.collection(MAINT_COLLECTION).doc(genId).set(patch, { merge:true });
+    return true;
+  }catch(e){
+    console.warn('maint save failed', e);
+    showToast(t('maint_fail'));
+    return false;
+  }
+}
+
+function bindMaintenance(){
+  document.querySelectorAll('[data-mgen]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ STATE.maintGenId = chip.dataset.mgen; render(); });
+  });
+
+  const hpd = document.getElementById('m-hrsperday');
+  if(hpd) hpd.addEventListener('change', async ()=>{
+    const val = hpd.value==='' ? null : parseFloat(hpd.value);
+    await saveMaintDoc(STATE.maintGenId, { hrsPerDay: val });
+  });
+
+  const tech = (()=>{ try{ return localStorage.getItem(TECH_LOCAL_KEY) || ''; }catch(e){ return ''; } })();
+
+  document.querySelectorAll('[data-mdone-time]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const key = btn.dataset.mdoneTime;
+      const iv = TIME_INTERVALS.find(x=>x.key===key);
+      const label = STATE.lang==='ar' ? iv.labelAr : iv.labelEn;
+      if(!confirm(t('maint_done_confirm',{name:label}))) return;
+      const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+      const iso = today.toISOString().slice(0,10);
+      const curH = latestHoursFor(STATE.maintGenId);
+      const ok = await saveMaintDoc(STATE.maintGenId, { time: { [key]: { lastDone: iso, by: tech } } });
+      if(ok){
+        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: iso, hoursAtService: curH, by: tech }]);
+        showToast(t('maint_done_toast'));
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-mdone-hr]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const hi = parseInt(btn.dataset.mdoneHr,10);
+      const cur = latestHoursFor(STATE.maintGenId);
+      const smaller = smallerHourIntervals(hi);
+      // Nesting: a larger service includes all smaller ones — confirm and reset them together.
+      let msg = t('maint_done_confirm',{name:hi+' hr'});
+      if(smaller.length) msg += '\n\n' + t('maint_nest_note');
+      if(!confirm(msg)) return;
+      const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+      const iso = today.toISOString().slice(0,10);
+      const doneAt = cur!==null ? cur : 0;
+      const patch = { hours: {} };
+      [hi, ...smaller].forEach(k=>{
+        patch.hours[String(k)] = { doneAtHrs: doneAt, date: iso, by: tech };
+      });
+      const ok = await saveMaintDoc(STATE.maintGenId, patch);
+      if(ok){
+        await logServicePerformed(STATE.maintGenId,
+          [hi, ...smaller].map(k=>({ kind:'hours', key:k, label:k+' hr', date: iso, hoursAtService: doneAt, by: tech })));
+        showToast(smaller.length ? t('maint_nest_done',{n:1+smaller.length}) : t('maint_done_toast'));
+      }
+    });
+  });
+
+  // --- Manual baseline entry: last service DATE + HOURS ---
+  document.querySelectorAll('[data-medit-time]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const key = btn.dataset.meditTime;
+      const iv = TIME_INTERVALS.find(x=>x.key===key);
+      const label = STATE.lang==='ar' ? iv.labelAr : iv.labelEn;
+      const m = maintDocFor(STATE.maintGenId) || {};
+      const existing = (m.time||{})[key] || {};
+      const dIn = prompt(t('maint_edit_date_prompt',{name:label}), existing.lastDone || '');
+      if(dIn===null) return;
+      const dStr = dIn.trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(dStr) || isNaN(new Date(dStr+'T00:00:00').getTime())){
+        showToast(t('maint_bad_date')); return;
+      }
+      const hIn = prompt(t('maint_edit_hrs_prompt',{name:label}), (existing.doneAtHrs!==undefined&&existing.doneAtHrs!==null)?existing.doneAtHrs:'');
+      if(hIn===null) return;
+      const hStr = hIn.trim();
+      let hVal = null;
+      if(hStr!==''){
+        hVal = parseFloat(hStr);
+        if(isNaN(hVal) || hVal<0){ showToast(t('maint_bad_hrs')); return; }
+      }
+      const ok = await saveMaintDoc(STATE.maintGenId, { time: { [key]: { lastDone: dStr, doneAtHrs: hVal, by: tech } } });
+      if(ok){
+        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }]);
+        showToast(t('maint_saved'));
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-svcdel]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('svc_delete_confirm'))) return;
+      try{
+        await db.collection(SVCLOG_COLLECTION).doc(btn.dataset.svcdel).delete();
+        showToast(t('svc_deleted'));
+      }catch(e){ console.warn(e); showToast(t('maint_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-medit-hr]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const hi = btn.dataset.meditHr;
+      const m = maintDocFor(STATE.maintGenId) || {};
+      const existing = (m.hours||{})[String(hi)] || {};
+      const label = hi + ' hr';
+      const hIn = prompt(t('maint_edit_hrs_prompt',{name:label}), (existing.doneAtHrs!==undefined&&existing.doneAtHrs!==null)?existing.doneAtHrs:'');
+      if(hIn===null) return;
+      const hVal = parseFloat(String(hIn).trim());
+      if(isNaN(hVal) || hVal<0){ showToast(t('maint_bad_hrs')); return; }
+      const dIn = prompt(t('maint_edit_date_prompt',{name:label}), existing.date || '');
+      if(dIn===null) return;
+      const dStr = String(dIn).trim();
+      if(dStr!=='' && (!/^\d{4}-\d{2}-\d{2}$/.test(dStr) || isNaN(new Date(dStr+'T00:00:00').getTime()))){
+        showToast(t('maint_bad_date')); return;
+      }
+      const ok = await saveMaintDoc(STATE.maintGenId, { hours: { [String(hi)]: { doneAtHrs: hVal, date: dStr||null, by: tech } } });
+      if(ok){
+        if(dStr) await logServicePerformed(STATE.maintGenId, [{ kind:'hours', key:hi, label:label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }]);
+        showToast(t('maint_saved'));
+      }
+    });
+  });
+}
+
+/* ================= CORRECTIVE MAINTENANCE (faults / repairs) ================= */
+// Doc shape: { genId, date(ISO), type, severity, status, hoursAtEvent,
+//              description, actionTaken, partsUsed, downtimeHrs, cost, by, closedDate, savedAt }
+
+function corrLabel(kind, value){
+  return t('corr_' + kind + '_' + value) || value;
+}
+function corrTypeLabel(v){ return t('corr_t_' + v); }
+function corrSevLabel(v){ return t('corr_s_' + v); }
+function corrStatusLabel(v){ return t('corr_st_' + v); }
+
+function sevClass(sev){
+  if(sev==='critical') return 'sev-critical';
+  if(sev==='high') return 'sev-high';
+  if(sev==='medium') return 'sev-medium';
+  return 'sev-low';
+}
+function correctiveFor(genId){
+  return STATE.corrective
+    .filter(c => !genId || c.genId===genId)
+    .sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
+}
+function openFaultCount(){
+  return STATE.corrective.filter(c => c.status && c.status!=='closed').length;
+}
+
+function renderCorrective(){
+  if(!STATE.generators.length){
+    return `<div class="empty"><div class="em-ic">⚠️</div>${t('no_gens')}</div>`;
+  }
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+  const todayIso = today.toISOString().slice(0,10);
+
+  const openN = openFaultCount();
+  const summary = openN ? `
+    <div class="card" style="padding:12px 16px;">
+      <div style="font-size:13.5px;font-weight:600;">${t('st_over')} ${t('corr_open_count',{n:openN})}</div>
+    </div>` : '';
+
+  const genOptions = STATE.generators.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  const typeOptions = CORR_TYPES.map(v=>`<option value="${v}">${corrTypeLabel(v)}</option>`).join('');
+  const sevOptions = CORR_SEVERITY.map(v=>`<option value="${v}"${v==='medium'?' selected':''}>${corrSevLabel(v)}</option>`).join('');
+  const statusOptions = CORR_STATUS.map(v=>`<option value="${v}">${corrStatusLabel(v)}</option>`).join('');
+
+  // filter chips
+  const chips = `
+    <div class="genchip ${STATE.corrFilter==='all'?'active':''}" data-corrfilter="all">${t('corr_filter_all')}</div>
+    <div class="genchip ${STATE.corrFilter==='open'?'active':''}" data-corrfilter="open">${t('corr_filter_open')}</div>`;
+
+  let list = correctiveFor(null);
+  if(STATE.corrFilter==='open') list = list.filter(c=>c.status && c.status!=='closed');
+
+  const rows = list.length ? list.map(c=>{
+    const g = genById(c.genId);
+    const dstr = c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '—';
+    const statusPill = `<span class="pill pill-${c.status||'open'}">${corrStatusLabel(c.status||'open')}</span>`;
+    return `<div class="corr-card ${sevClass(c.severity)}">
+      <div class="rowbetween" style="align-items:flex-start;">
+        <div>
+          <div style="font-weight:800;font-size:13.5px;">${g?g.name:'—'} <span style="font-weight:600;color:var(--muted);font-size:12px;">· ${corrTypeLabel(c.type||'other')}</span></div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${dstr}${c.hoursAtEvent?` · ${t('maint_at_hrs',{n:c.hoursAtEvent})}`:''}${c.by?` · ${c.by}`:''}</div>
+        </div>
+        <div style="text-align:end;">${statusPill}<div style="font-size:11px;color:var(--muted);margin-top:3px;">${corrSevLabel(c.severity||'low')}</div></div>
+      </div>
+      <div style="font-size:12.5px;margin-top:7px;white-space:pre-wrap;">${(c.description||'')}</div>
+      ${c.actionTaken?`<div style="font-size:12px;margin-top:5px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_action')}:</b> ${c.actionTaken}</div>`:''}
+      ${c.partsUsed?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_parts')}:</b> ${c.partsUsed}</div>`:''}
+      ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
+        <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div>`;
+
+  return `
+  ${summary}
+  <div class="card">
+    <h3>${t('corr_new')}</h3>
+    <label>${t('corr_gen')}</label>
+    <select id="c-gen">${genOptions}</select>
+    <div class="grid2">
+      <div><label>${t('corr_date')}</label><input type="date" id="c-date" value="${todayIso}"></div>
+      <div><label>${t('corr_hours')}</label><input type="number" step="0.1" id="c-hours" placeholder="—"></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('corr_type')}</label><select id="c-type">${typeOptions}</select></div>
+      <div><label>${t('corr_sev')}</label><select id="c-sev">${sevOptions}</select></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('corr_status')}</label><select id="c-status">${statusOptions}</select></div>
+      <div><label>${t('corr_downtime')}</label><input type="number" step="0.1" id="c-downtime" placeholder="—"></div>
+    </div>
+    <label>${t('corr_desc')}</label>
+    <textarea id="c-desc" rows="3" placeholder="—"></textarea>
+    <label>${t('corr_action')}</label>
+    <textarea id="c-action" rows="2" placeholder="—"></textarea>
+    <label>${t('corr_parts')}</label>
+    <input type="text" id="c-parts" placeholder="—">
+    <label>${t('corr_by')}</label>
+    <input type="text" id="c-by" placeholder="—">
+    <button class="btn btn-primary" id="c-save" style="margin-top:12px;">${t('corr_save')}</button>
+  </div>
+
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:8px;"><h3 style="margin:0;">${t('corr_list')}</h3></div>
+    <div class="genpicker">${chips}</div>
+  </div>
+  ${rows}
+  `;
+}
+
+function bindCorrective(){
+  document.querySelectorAll('[data-corrfilter]').forEach(ch=>{
+    ch.addEventListener('click', ()=>{ STATE.corrFilter = ch.dataset.corrfilter; render(); });
+  });
+
+  const saveBtn = document.getElementById('c-save');
+  if(saveBtn) saveBtn.addEventListener('click', async ()=>{
+    const genId = (document.getElementById('c-gen')||{}).value;
+    const desc = ((document.getElementById('c-desc')||{}).value||'').trim();
+    if(!genId){ showToast(t('corr_need_gen')); return; }
+    if(!desc){ showToast(t('corr_need_desc')); return; }
+    const val = id => { const e=document.getElementById(id); return e? String(e.value||'').trim() : ''; };
+    const num = id => { const v=val(id); return v===''? null : parseFloat(v); };
+    const by = val('c-by');
+    if(by){ try{ localStorage.setItem(TECH_LOCAL_KEY, by); }catch(e){} }
+    const rec = {
+      genId,
+      date: val('c-date'),
+      type: val('c-type') || 'other',
+      severity: val('c-sev') || 'low',
+      status: val('c-status') || 'open',
+      hoursAtEvent: num('c-hours'),
+      description: desc,
+      actionTaken: val('c-action'),
+      partsUsed: val('c-parts'),
+      downtimeHrs: num('c-downtime'),
+      by,
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    saveBtn.disabled = true;
+    try{
+      await db.collection(CORR_COLLECTION).add(rec);
+      showToast(t('corr_saved'));
+      ['c-desc','c-action','c-parts','c-hours','c-downtime'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+      render();
+    }catch(e){
+      console.warn('corrective save failed', e);
+      showToast(t('corr_fail'));
+    }finally{ saveBtn.disabled = false; }
+  });
+
+  document.querySelectorAll('[data-corrstatus]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.corrstatus;
+      const c = STATE.corrective.find(x=>x.id===id);
+      if(!c) return;
+      const order = CORR_STATUS;
+      const nextIdx = (order.indexOf(c.status||'open') + 1) % order.length;
+      const next = order[nextIdx];
+      const patch = { status: next };
+      if(next==='closed'){
+        const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+        patch.closedDate = today.toISOString().slice(0,10);
+      }
+      try{
+        await db.collection(CORR_COLLECTION).doc(id).update(patch);
+        showToast(t('corr_saved'));
+      }catch(e){ console.warn(e); showToast(t('corr_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-corrdel]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('corr_del_confirm'))) return;
+      try{
+        await db.collection(CORR_COLLECTION).doc(btn.dataset.corrdel).delete();
+        showToast(t('corr_saved'));
+      }catch(e){ console.warn(e); showToast(t('corr_fail')); }
+    });
+  });
+}
+
+/* ================= GENERATORS ================= */
+function renderGenerators(){
+  const rows = STATE.generators.map(g=>{
+    const count = STATE.readings.filter(r=>r.genId===g.id).length;
+    return `<div class="genrow">
+      <div class="genrow-top">
+        <span class="badge ${g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${g.client}</span>
+        <div class="gname">${g.name}</div>
+        <div class="gcount">${count} ${t('readings_lbl')}</div>
+      </div>
+      <div class="genrow-actions">
+        <button class="btn btn-outline btn-sm" data-rename="${g.id}">${t('rename')}</button>
+        <button class="btn btn-danger btn-sm" data-remove="${g.id}">${t('remove')}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="card">
+    <h3>${t('your_gens',{n:STATE.generators.length})}</h3>
+    ${rows || `<div class="hint">${t('no_gens')}</div>`}
+  </div>
+  <div class="card">
+    <h3>${t('add_gen')}</h3>
+    <label class="req">${t('gen_name')}</label>
+    <input type="text" id="ng-name" placeholder="UNHCR Genset 6">
+    <label class="req">${t('gen_client')}</label>
+    <select id="ng-client">
+      <option value="UNHCR">UNHCR</option>
+      <option value="FAO">FAO</option>
+      <option value="Other">${t('client_other')}</option>
+    </select>
+    <button class="btn btn-primary" id="addGenBtn">${t('add_gen_btn')}</button>
+  </div>
+  <div class="card">
+    <h3>${t('data_sync')}</h3>
+    <div class="hint">${t('data_sync_body')}</div>
+  </div>
+  <div class="card">
+    <h3>${t('thresholds')}</h3>
+    <div class="hint">
+      Voltage 360–420 V · Frequency 49–51 Hz · Oil pressure 2–7 bar ·
+      Coolant ≤ 98°C · Oil temp ≤ 110°C · Battery 23–29 V · Fuel ≥ 15%
+    </div>
+  </div>
+  <div class="card">
+    <h3>EnvironmSafe</h3>
+    <div class="hint">
+      ${t('company_line')}<br>
+      support@environmsafe.com · +967 78 340 2932 · www.environmsafe.com
+    </div>
+  </div>
+  `;
+}
+
+function bindGenerators(){
+  document.getElementById('addGenBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('ng-name').value.trim();
+    const client = document.getElementById('ng-client').value;
+    if(!name){ showToast(t('warn_genname')); return; }
+    try{
+      await db.collection(GENERATORS_COLLECTION).add({ name, client });
+      showToast(t('added'));
+    }catch(e){
+      console.warn('add generator failed', e);
+      showToast(t('add_fail'));
+    }
+  });
+
+  document.querySelectorAll('[data-rename]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const g = genById(btn.dataset.rename);
+      const newName = prompt(t('rename_prompt'), g.name);
+      if(newName && newName.trim()){
+        try{
+          await db.collection(GENERATORS_COLLECTION).doc(g.id).update({ name: newName.trim() });
+        }catch(e){
+          console.warn('rename failed', e);
+          showToast(t('rename_fail'));
+        }
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const g = genById(btn.dataset.remove);
+      const count = STATE.readings.filter(r=>r.genId===g.id).length;
+      const msg = count ? t('remove_confirm_n',{n:count}) : t('remove_confirm',{name:g.name});
+      if(!confirm(msg)) return;
+      try{
+        await db.collection(GENERATORS_COLLECTION).doc(g.id).delete();
+        showToast(t('removed'));
+      }catch(e){
+        console.warn('remove failed', e);
+        showToast(t('remove_fail'));
+      }
+    });
+  });
+}
+
+// Language toggle wiring
+document.querySelectorAll('[data-lang]').forEach(btn=>{
+  btn.addEventListener('click', ()=> setLang(btn.dataset.lang));
+});
+
+// Initialize language (Arabic default) before first render
+STATE.lang = getLang();
+applyLangChrome();
+
+init();
+</script>
+</body>
+</html>

@@ -192,6 +192,8 @@
   .pill-open{background:#FDECEA;color:#C0392B;}
   .pill-in_progress{background:#FEF5E0;color:#8A6D1F;}
   .pill-closed{background:#E7F6EC;color:#1E7A43;}
+  .fault-id-badge{display:inline-block;font-size:11px;font-weight:800;color:var(--navy);
+    background:#F5F6F8;border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin-bottom:6px;font-family:monospace;}
   .photothumbs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
   .photothumb{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
   .photothumb img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -456,6 +458,7 @@ const I18N = {
     corr_report_no:'رقم التقرير', corr_sign_eng:'مهندس EnvironmSafe',
     corr_sign_client:'مشرف العميل', sign_name:'الاسم', sign_signature:'التوقيع', sign_date:'التاريخ',
     corr_word_downloaded:'✅ تم تنزيل ملف Word',
+    corr_fault_id:'رقم العطل', corr_short_desc:'وصف مختصر',
     corr_causes:'أسباب العطل', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
     corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل عطل',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
@@ -592,6 +595,7 @@ const I18N = {
     corr_report_no:'Report No.', corr_sign_eng:'EnvironmSafe Engineer',
     corr_sign_client:'Client Supervisor', sign_name:'Name', sign_signature:'Signature', sign_date:'Date',
     corr_word_downloaded:'✅ Word file downloaded',
+    corr_fault_id:'Fault ID', corr_short_desc:'Short description',
     corr_causes:'Causes of the fault', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
     corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per fault',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
@@ -1964,21 +1968,21 @@ function buildReportTable(){
     const all = STATE.reportGenId==='__all__';
     const rows = corrReportRows(STATE.reportGenId);
     const hasCF = customFieldsFor('corrective').length > 0;
-    const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
+    const headers = [t('corr_fault_id'), t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
-               t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
+               t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
       .concat(hasCF?[t('customfields_title')]:[]);
     const body = rows.map(c=>{
       const gg = genById(c.genId);
-      return [c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc) : '']
+      return [c.faultId || c.id, c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc) : '']
         .concat(all?[gg?gg.name:'']:[])
         .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
                  (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
-                 c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
+                 c.shortDescription||'', c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
                  (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||''])
         .concat(hasCF?[customFieldsSummary('corrective', c.customFields)]:[]);
     });
-    const sevIdx = all ? 3 : 2;
+    const sevIdx = all ? 4 : 3;
     const bad = rows.map(c=> headers.map((h,i)=> i===sevIdx && (c.severity==='critical'||c.severity==='high')));
     const openN = rows.filter(c=>c.status && c.status!=='closed').length;
     const dt = Math.round(rows.reduce((s2,c)=>s2+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
@@ -2180,7 +2184,7 @@ function faultReportBody(c){
       </div>
     </div>
     <div class="fldgrid">
-      ${field(t('corr_report_no'), c.id)}
+      ${field(t('corr_fault_id'), c.faultId || c.id)}
       ${field(t('corr_gen'), g?g.name:'–')}
       ${field('Client', g?g.client:'–')}
       ${field(t('corr_date'), dstr)}
@@ -2192,6 +2196,7 @@ function faultReportBody(c){
       ${field(t('corr_by'), c.by)}
       ${customFieldsFor('corrective').map(f=>field(cfLabel(f), c.customFields && c.customFields[f.key])).join('')}
     </div>
+    ${block(t('corr_short_desc'), c.shortDescription)}
     ${block(t('corr_desc'), c.description)}
     ${block(t('corr_causes'), c.causesOfFault)}
     ${block(t('corr_action'), c.actionTaken)}
@@ -2734,6 +2739,17 @@ function openFaultCount(){
   return STATE.corrective.filter(c => c.status && c.status!=='closed').length;
 }
 
+// Serial fault IDs: "Cor-813", "Cor-814", ... Derived from the highest faultSeq already
+// saved (live-synced via STATE.corrective), so no separate counter doc or transaction is
+// needed — simplest thing that works correctly for this app's single-technician workflow.
+const FAULT_ID_PREFIX = 'Cor-';
+const FAULT_ID_START = 813;
+
+function nextFaultSeq(){
+  const nums = STATE.corrective.map(c=>c.faultSeq).filter(n=>typeof n==='number' && !isNaN(n));
+  return nums.length ? Math.max(...nums)+1 : FAULT_ID_START;
+}
+
 function renderPhotoThumbs(photos, prefix, readOnly){
   if(!photos || !photos.length) return '';
   return `<div class="photothumbs">` + photos.map((durl,i)=>`
@@ -2751,6 +2767,7 @@ function renderCorrEditForm(c){
   const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
   return `<div class="corr-card ${sevClass(c.severity)}">
     <h3 style="margin-top:0;">${t('corr_edit_title')}</h3>
+    ${c.faultId ? `<div class="fault-id-badge">${t('corr_fault_id')}: ${c.faultId}</div>` : ''}
     <label>${t('corr_gen')}</label>
     <select id="ce-gen">${genOptions}</select>
     <div class="grid2">
@@ -2765,6 +2782,8 @@ function renderCorrEditForm(c){
       <div><label>${t('corr_status')}</label><select id="ce-status">${statusOptions}</select></div>
       <div><label>${t('corr_downtime')}</label><input type="number" step="0.1" id="ce-downtime" value="${esc(c.downtimeHrs)}" placeholder="—"></div>
     </div>
+    <label>${t('corr_short_desc')}</label>
+    <input type="text" id="ce-shortdesc" value="${esc(c.shortDescription)}" placeholder="—">
     <label>${t('corr_desc')}</label>
     <textarea id="ce-desc" rows="3" placeholder="—">${esc(c.description)}</textarea>
     <label>${t('corr_causes')}</label>
@@ -2823,11 +2842,13 @@ function renderCorrective(){
     return `<div class="corr-card ${sevClass(c.severity)}">
       <div class="rowbetween" style="align-items:flex-start;">
         <div>
+          ${c.faultId?`<div class="fault-id-badge">${c.faultId}</div>`:''}
           <div style="font-weight:800;font-size:13.5px;">${g?g.name:'—'} <span style="font-weight:600;color:var(--muted);font-size:12px;">· ${corrTypeLabel(c.type||'other')}</span></div>
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${dstr}${c.hoursAtEvent?` · ${t('maint_at_hrs',{n:c.hoursAtEvent})}`:''}${c.by?` · ${c.by}`:''}</div>
         </div>
         <div style="text-align:end;">${statusPill}<div style="font-size:11px;color:var(--muted);margin-top:3px;">${corrSevLabel(c.severity||'low')}</div></div>
       </div>
+      ${c.shortDescription?`<div style="font-weight:700;font-size:13px;margin-top:6px;">${c.shortDescription}</div>`:''}
       <div style="font-size:12.5px;margin-top:7px;white-space:pre-wrap;">${(c.description||'')}</div>
       ${c.causesOfFault?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_causes')}:</b> ${c.causesOfFault}</div>`:''}
       ${c.actionTaken?`<div style="font-size:12px;margin-top:5px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_action')}:</b> ${c.actionTaken}</div>`:''}
@@ -2850,6 +2871,7 @@ function renderCorrective(){
   ${summary}
   <div class="card">
     <h3>${t('corr_new')}</h3>
+    <div class="fault-id-badge">${t('corr_fault_id')}: ${FAULT_ID_PREFIX}${nextFaultSeq()}</div>
     <label>${t('corr_gen')}</label>
     <select id="c-gen">${genOptions}</select>
     <div class="grid2">
@@ -2864,6 +2886,8 @@ function renderCorrective(){
       <div><label>${t('corr_status')}</label><select id="c-status">${statusOptions}</select></div>
       <div><label>${t('corr_downtime')}</label><input type="number" step="0.1" id="c-downtime" placeholder="—"></div>
     </div>
+    <label>${t('corr_short_desc')}</label>
+    <input type="text" id="c-shortdesc" placeholder="—">
     <label>${t('corr_desc')}</label>
     <textarea id="c-desc" rows="3" placeholder="—"></textarea>
     <label>${t('corr_causes')}</label>
@@ -2922,13 +2946,17 @@ function bindCorrective(){
     const num = id => { const v=val(id); return v===''? null : parseFloat(v); };
     const by = val('c-by');
     if(by){ try{ localStorage.setItem(TECH_LOCAL_KEY, by); }catch(e){} }
+    const faultSeq = nextFaultSeq();
     const rec = {
       genId,
+      faultSeq,
+      faultId: FAULT_ID_PREFIX + faultSeq,
       date: val('c-date'),
       type: val('c-type') || 'other',
       severity: val('c-sev') || 'low',
       status: val('c-status') || 'open',
       hoursAtEvent: num('c-hours'),
+      shortDescription: val('c-shortdesc'),
       description: desc,
       causesOfFault: val('c-causes'),
       actionTaken: val('c-action'),
@@ -2944,7 +2972,7 @@ function bindCorrective(){
     try{
       await db.collection(CORR_COLLECTION).add(rec);
       showToast(t('corr_saved'));
-      ['c-desc','c-causes','c-action','c-parts','c-hours','c-downtime','c-recommend'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+      ['c-shortdesc','c-desc','c-causes','c-action','c-parts','c-hours','c-downtime','c-recommend'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
       STATE.newFaultPhotos = [];
       render();
     }catch(e){
@@ -3027,6 +3055,7 @@ function bindCorrective(){
         severity: val('ce-sev') || 'low',
         status: val('ce-status') || 'open',
         hoursAtEvent: num('ce-hours'),
+        shortDescription: val('ce-shortdesc'),
         description: desc,
         causesOfFault: val('ce-causes'),
         actionTaken: val('ce-action'),

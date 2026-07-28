@@ -135,7 +135,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   console.log('\n=== Corrective report marks high/critical severity ===');
   run(sb,`STATE.reportType='corr'; STATE.reportGenId='g1'; STATE.reportFrom='2026-07-01'; STATE.reportTo='2026-07-31';`);
   const rtC = run(sb,'buildReportTable()');
-  const sevCol = 2;
+  const sevCol = 3;
   check('high severity row flagged in bad-mask', rtC.bad[0][sevCol]===true, JSON.stringify(rtC.bad[0]));
   check('low severity row not flagged', rtC.bad[1][sevCol]===false, JSON.stringify(rtC.bad[1]));
 
@@ -151,6 +151,16 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,`STATE.reportType='corr'; STATE.reportGenId='g2'; STATE.reportFrom='2026-07-20'; STATE.reportTo='2026-07-31';`);
   const rtE = run(sb,'buildReportTable()');
   check('empty flag set when no rows', rtE.empty===true && rtE.body.length===0);
+
+  console.log('\n=== Serial fault IDs (Cor-813, Cor-814, ...) ===');
+  run(sb,`STATE.corrective = [];`);
+  check('first fault ID starts at Cor-813', run(sb,`FAULT_ID_PREFIX + nextFaultSeq()`)==='Cor-813');
+  run(sb,`STATE.corrective = [{id:'x1',faultSeq:813}];`);
+  check('next ID increments to Cor-814', run(sb,`FAULT_ID_PREFIX + nextFaultSeq()`)==='Cor-814');
+  run(sb,`STATE.corrective = [{id:'x1',faultSeq:813},{id:'x2',faultSeq:820}];`);
+  check('next ID follows the highest existing sequence, not just the count', run(sb,`nextFaultSeq()`)===821, 'got '+run(sb,`nextFaultSeq()`));
+  run(sb,`STATE.corrective = [{id:'x1'},{id:'x2',faultSeq:null}];`);
+  check('faults with no faultSeq (legacy records) are ignored, not treated as 0', run(sb,`nextFaultSeq()`)===813);
 
   console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);
   process.exit(fail?1:0);

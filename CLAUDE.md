@@ -13,13 +13,15 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 
 ### Firebase project
 - Project id: `generators-readings`
-- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`
+- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`, `settings` (label overrides, single doc `labels`), `customfields` (user-defined extra fields)
 - **CRITICAL:** every collection must be listed in Firestore security rules or writes silently fail with "Could not save — check connection". The current rules are in `firestore-rules.txt`. Whenever you add a new collection, you MUST update those rules and the user must publish them in the Firebase console.
 
 ### Live URLs
-- App: https://environmsafe-generators-daily.netlify.app/
+- App (primary/custom domain): https://environmsafe.com
+- App (Netlify subdomain): https://environmsafe-generators-daily.netlify.app/
 - Netlify deploys: app.netlify.com → site `environmsafe-generators-daily` → Deploys
 - Firestore rules: https://console.firebase.google.com/project/generators-readings/firestore/rules
+- The Netlify site is Git-connected to this repo's `main` branch (via `netlify.toml`'s build command, which copies `generator-readings.html` → `index.html`). Pushing to `main` auto-deploys — no manual drag-and-drop needed anymore.
 
 ## Tabs / features (7 tabs)
 1. **New** — reading entry (grouped: core / voltage / current / engine-fluids / notes). Out-of-range values flagged.
@@ -33,9 +35,9 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
    - **Nesting:** logging a larger hours service auto-resets all smaller ones (500 → also 250,125).
    - **Due-date rule (important, was a real bug):** hours-based due DATE is anchored to the **last service date**, not today: `dueDate = lastServiceDate + round(intervalHrs / hrsPerDay)`. Default `hrsPerDay = 24` unless set per generator. A service is "overdue" if EITHER the date passed OR the hours were reached (a stale reading must never hide an overdue service).
    - Every logged/back-filled service also writes a permanent record to `servicelog` (the audit trail).
-5. **Faults (corrective)** — log failures/breakdowns/repairs: type, severity, status, hours-at-event, description, action, parts, downtime, by. Status cycles open→in_progress→closed. Colour-coded severity.
+5. **Faults (corrective)** — log failures/breakdowns/repairs: type, severity, status, hours-at-event, description, causes of fault, action, parts, downtime, recommendations (optional), by, up to 4 photos (client-side compressed, stored as base64 in the doc). Status cycles open→in_progress→closed. Colour-coded severity. **Every field can be edited at any status** via the ✎ Edit button on each fault card (not just status). Each fault also has **🖨️ Print PDF** and **📄 Word** buttons that generate an official single-fault report (logo header, all fields, photos appended at the end, and signature blocks for the EnvironmSafe engineer + client supervisor).
 6. **Dashboard** — per-generator latest-status cards, trend charts, and a service+faults summary card.
-7. **Setup** — add/rename/remove generators; contact card.
+7. **Setup** — add/rename/remove generators; contact card; **Custom fields** panel (add new fields — text/long text/number/date/dropdown — to the New Reading, Faults, Log Service, or Add Generator forms; deactivate/delete without losing historical data); **Labels** panel (rename any text/tab/label in the app, per-language, grouped by section with search).
 
 ## HOW — conventions you MUST follow
 - **Keep it one single HTML file.** Do not split into modules or add a build system unless the user explicitly asks. The whole workflow depends on drag-and-drop of one file.
@@ -45,7 +47,8 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 - **Out-of-range thresholds:** Voltage 360–420 V, Frequency 49–51 Hz, Oil pressure 2–7 bar, Coolant ≤98 °C, Oil temp ≤110 °C, Battery 23–29 V, Fuel ≥15 %. Blank fields are never flagged.
 - **Never break the schedule math.** The maintenance/due-date/nesting logic is covered by tests — run them after any change (see below).
 - **Firestore: add collection → update rules.** If you introduce a new collection, update `firestore-rules.txt` and tell the user to publish it, or writes will fail.
-- **i18n `t()` function:** there is a global `t(key, params)`. Never shadow it with a local variable named `t`.
+- **i18n `t()` function:** there is a global `t(key, params)`. Never shadow it with a local variable named `t`. `t()` checks `STATE.labelOverrides[key][lang]` first (user-set via the Setup → Labels panel) before falling back to `I18N[lang][key]` — a blank override means "use the default". If you add a NEW visible string, add it to `I18N` as normal; it automatically becomes editable in the Labels panel (no extra wiring needed) via `allLabelKeys()`, and gets auto-categorized by `categoryForLabelKey()` off its prefix (add a new prefix to `LABEL_CATEGORY_PREFIXES` if it doesn't fit an existing category — otherwise it lands in "General", which is fine).
+- **Custom fields:** user-defined extra fields (Setup → Custom fields) attach to one of four sections: `reading`, `corrective`, `service`, `generator`. Definitions live in the `customfields` collection; values are saved as a `customFields: {key: value}` map on the record. Use `renderCustomFieldInputs(section, existingValues, idPrefix)` + `collectCustomFieldValues(section, idPrefix)` in form-based sections (reading/corrective/generator), or `promptCustomFieldValues(section)` where the flow is a one-tap action with no form (service log). Display saved values with `renderCustomFieldValues()` (HTML) or `customFieldsSummary()` (flat "key: value" string for table-style report exports). A full page re-render (e.g. after a photo upload) will wipe unsaved text in any input/textarea/select under `#app` unless you go through `rerenderPreservingCorrForm()` (or an equivalent save/restore) instead of calling `render()` directly — this bit us once already for the Faults form.
 
 ## Testing (run after every change)
 Node test suites live alongside the HTML (they extract the inline `<script>` and run it against a mock Firestore):
@@ -54,17 +57,18 @@ Node test suites live alongside the HTML (they extract the inline `<script>` and
 - `test_reports.js` — report period filtering, CSV format
 - `test_corrective.js` — corrective events + the four report builders
 - `test_svclog.js` — service history log, all-generators reports, backup
+- `test_labels_customfields.js` — label-override precedence in `t()`, label categorization, custom-field definitions/filtering/rendering/collection, and their flow into report exports
 - `simulate_firestore.js` — auth, two-device sync, permission-denied diagnostics
 
-Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog; do node $f.js; done`
+Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields; do node $f.js; done`
 All suites must print `0 failed`. If you add a feature, add tests for it.
 
 For UI changes, a Playwright headless check at 412×892 (mock Firebase, since the real one is network-gated in CI) catches overflow/console errors. See `firebase_mock_init.js` for the seed/mock.
 
-## Deploy (the user does this from their phone)
-1. You commit the updated `generator-readings.html` to the repo.
-2. If GitHub→Netlify auto-deploy is connected, it goes live automatically. Otherwise the user drag-drops the file on the Netlify Deploys page and taps "Rename and deploy" (renames to `index.html`).
-3. If rules changed, the user publishes `firestore-rules.txt` in the Firebase console.
+## Deploy
+1. Commit the updated `generator-readings.html` (and `netlify.toml` if it changes) to `main` and push.
+2. Netlify is Git-connected and auto-deploys from `main` within seconds — no manual step needed. Verify via the Netlify MCP tools (`get-project` / `get-deploy-for-site`) that the new deploy's `commit_ref` matches your latest push and `state` is `ready`.
+3. If Firestore collections/rules changed, the user still must publish `firestore-rules.txt` in the Firebase console — that step cannot be automated.
 
 ## Known real-world data (do not invent; confirm on site if unsure)
 - FAO Genset 1: engine Perkins 1106A-70T (serial PP82576U084151H, 7.0 L 6-cyl), alternator Stamford UC.I274E14 (S/N X24B063436), 140 kVA, runs 17 h/day.

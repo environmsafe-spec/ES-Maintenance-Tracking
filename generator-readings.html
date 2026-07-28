@@ -202,6 +202,15 @@
   .lbl-row{border-top:1px solid var(--border);padding:8px 0;}
   .lbl-key{font-size:10px;color:var(--muted);font-family:monospace;margin-bottom:4px;}
   .lbl-in{width:100%;margin-bottom:6px;}
+  .cf-section{margin-bottom:12px;}
+  .cf-section h4{margin:0 0 6px;font-size:12.5px;color:var(--navy);}
+  .cf-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+    border-top:1px solid var(--border);padding:8px 0;}
+  .cf-row.cf-inactive{opacity:.6;}
+  .cf-row-label{font-size:12.5px;font-weight:600;}
+  .cf-type{font-weight:400;color:var(--muted);font-size:11px;}
+  .cf-inactive-tag{color:var(--bad);font-size:11px;}
+  .cf-row-actions{display:flex;gap:6px;}
   .maint-table td{white-space:normal;vertical-align:middle;font-size:12px;padding:9px 10px;}
   .maint-table th{font-size:11px;}
   .maint-table .btn-sm{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap;}
@@ -341,16 +350,14 @@ function photosFitBudget(photos){
   return total <= FAULT_PHOTOS_MAX_TOTAL_CHARS;
 }
 
-const CORR_FORM_FIELD_IDS = ['c-gen','c-date','c-hours','c-type','c-sev','c-status','c-downtime','c-desc','c-causes','c-action','c-parts','c-by','c-recommend',
-  'ce-gen','ce-date','ce-hours','ce-type','ce-sev','ce-status','ce-downtime','ce-desc','ce-causes','ce-action','ce-parts','ce-by','ce-recommend'];
-
 // A full re-render (photo add/remove, etc.) rebuilds the corrective forms from scratch, which
-// would silently discard any text the user already typed into unrelated fields — save & restore it.
+// would silently discard any text the user already typed into unrelated fields (including
+// dynamically-added custom fields) — save & restore every id'd input/textarea/select in #app.
 function rerenderPreservingCorrForm(){
   const saved = {};
-  CORR_FORM_FIELD_IDS.forEach(id=>{ const e=document.getElementById(id); if(e) saved[id]=e.value; });
+  document.querySelectorAll('#app input[id], #app textarea[id], #app select[id]').forEach(e=>{ saved[e.id] = e.value; });
   render();
-  CORR_FORM_FIELD_IDS.forEach(id=>{ const e=document.getElementById(id); if(e && saved[id]!==undefined) e.value=saved[id]; });
+  Object.keys(saved).forEach(id=>{ const e=document.getElementById(id); if(e) e.value = saved[id]; });
 }
 
 async function addFaultPhotos(files, target){
@@ -1083,6 +1090,7 @@ function renderNewForm(){
   <div class="card">
     <h3>${t('sec_notes')}</h3>
     <textarea id="f-notes" placeholder="${t('ph_notes')}"></textarea>
+    ${renderCustomFieldInputs('reading', null, 'f')}
     <button class="btn btn-primary" id="saveBtn">${t('save_reading')}</button>
   </div>
   `;
@@ -1123,6 +1131,7 @@ async function bindNewForm(){
       battV: document.getElementById('f-battV').value,
       fuel: document.getElementById('f-fuel').value,
       notes: document.getElementById('f-notes').value.trim(),
+      customFields: collectCustomFieldValues('reading', 'f'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -1197,6 +1206,7 @@ function renderHistory(){
           ${t('f_oilP')} ${r.oilP||'-'} bar · ${t('f_oilT')} ${r.oilT||'-'} °C<br>
           ${t('f_rpm')} ${r.rpm||'-'}
         </div>
+        ${renderCustomFieldValues('reading', r.customFields)}
         <button class="btn btn-danger btn-sm" style="margin-top:10px;" data-del="${r.id}">${t('delete_reading')}</button>
       </details>
     </div>`;
@@ -1886,7 +1896,8 @@ function buildReportTable(){
 
   if(type==='readings'){
     const rows = readingsForReport();
-    const headers = REPORT_COLS.map(c=> bi ? `${c[1]} / ${c[2]}` : c[1]).concat([bi?'خارج النطاق / Flags':'Flags']);
+    const hasCF = customFieldsFor('reading').length > 0;
+    const headers = REPORT_COLS.map(c=> bi ? `${c[1]} / ${c[2]}` : c[1]).concat([bi?'خارج النطاق / Flags':'Flags']).concat(hasCF?[t('customfields_title')]:[]);
     const body=[], bad=[];
     rows.forEach(r=>{
       const oor = outOfRangeKeys(r);
@@ -1897,6 +1908,7 @@ function buildReportTable(){
       });
       const mask = REPORT_COLS.map(c=> oor.has(c[0]));
       line.push(flagsFor(r).join('; ')); mask.push(false);
+      if(hasCF){ line.push(customFieldsSummary('reading', r.customFields)); mask.push(false); }
       body.push(line); bad.push(mask);
     });
     const flagged = rows.filter(r=>flagsFor(r).length>0).length;
@@ -1926,15 +1938,18 @@ function buildReportTable(){
   if(type==='svclog'){
     const all = STATE.reportGenId==='__all__';
     const rows = svcLogRows(STATE.reportGenId);
+    const hasCF = customFieldsFor('service').length > 0;
     const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
-      .concat([t('svc_kind'), t('svc_interval'), t('svc_hours_at'), t('corr_by'), t('svc_backfilled')]);
+      .concat([t('svc_kind'), t('svc_interval'), t('svc_hours_at'), t('corr_by'), t('svc_backfilled')])
+      .concat(hasCF?[t('customfields_title')]:[]);
     const body = rows.map(x=>{
       const gg = genById(x.genId);
       return [x.date ? new Date(x.date+'T00:00:00').toLocaleDateString(loc) : '']
         .concat(all?[gg?gg.name:'']:[])
         .concat([svcKindLabel(x.kind), x.intervalLabel||x.intervalKey,
                  (x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'',
-                 x.by||'', x.backfilled?'✓':'']);
+                 x.by||'', x.backfilled?'✓':''])
+        .concat(hasCF?[customFieldsSummary('service', x.customFields)]:[]);
     });
     const bad = rows.map(()=> headers.map(()=>false));
     return { type, headers, body, bad,
@@ -1948,17 +1963,20 @@ function buildReportTable(){
   if(type==='corr'){
     const all = STATE.reportGenId==='__all__';
     const rows = corrReportRows(STATE.reportGenId);
+    const hasCF = customFieldsFor('corrective').length > 0;
     const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
-               t('corr_desc'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_by')]);
+               t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
+      .concat(hasCF?[t('customfields_title')]:[]);
     const body = rows.map(c=>{
       const gg = genById(c.genId);
       return [c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc) : '']
         .concat(all?[gg?gg.name:'']:[])
         .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
                  (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
-                 c.description||'', c.actionTaken||'', c.partsUsed||'',
-                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.by||'']);
+                 c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
+                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||''])
+        .concat(hasCF?[customFieldsSummary('corrective', c.customFields)]:[]);
     });
     const sevIdx = all ? 3 : 2;
     const bad = rows.map(c=> headers.map((h,i)=> i===sevIdx && (c.severity==='critical'||c.severity==='high')));
@@ -2172,6 +2190,7 @@ function faultReportBody(c){
       ${field(t('corr_hours'), c.hoursAtEvent)}
       ${field(t('corr_downtime'), c.downtimeHrs)}
       ${field(t('corr_by'), c.by)}
+      ${customFieldsFor('corrective').map(f=>field(cfLabel(f), c.customFields && c.customFields[f.key])).join('')}
     </div>
     ${block(t('corr_desc'), c.description)}
     ${block(t('corr_causes'), c.causesOfFault)}
@@ -2511,7 +2530,8 @@ function recentServicesCard(genId){
       <td>${x.date? new Date(x.date+'T00:00:00').toLocaleDateString(loc):'—'}</td>
       <td><b>${x.intervalLabel||x.intervalKey}</b><br><span style="font-size:11px;color:var(--muted)">${svcKindLabel(x.kind)}</span></td>
       <td>${(x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'—'}</td>
-      <td>${x.by||'—'}${x.backfilled?`<br><span style="font-size:10px;color:var(--muted)">${t('svc_backfilled')}</span>`:''}</td>
+      <td>${x.by||'—'}${x.backfilled?`<br><span style="font-size:10px;color:var(--muted)">${t('svc_backfilled')}</span>`:''}
+        ${renderCustomFieldValues('service', x.customFields)}</td>
       <td><button class="btn btn-outline btn-sm" data-svcdel="${x.id}">${t('corr_delete')}</button></td>
     </tr>`).join('');
   return `
@@ -2528,7 +2548,7 @@ function recentServicesCard(genId){
 
 // Append a permanent, dated record of a service that was performed.
 // This is the audit trail — the maintenance doc only holds the LATEST baseline.
-async function logServicePerformed(genId, entries){
+async function logServicePerformed(genId, entries, customFields){
   // entries: [{ kind:'time'|'hours', key, label, date, hoursAtService, by, backfilled }]
   try{
     const batch = db.batch ? null : null; // simple sequential adds (small counts)
@@ -2542,6 +2562,7 @@ async function logServicePerformed(genId, entries){
         hoursAtService: (e.hoursAtService===undefined || e.hoursAtService==='') ? null : e.hoursAtService,
         by: e.by || '',
         backfilled: !!e.backfilled,
+        customFields: customFields || {},
         savedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
@@ -2582,12 +2603,13 @@ function bindMaintenance(){
       const iv = TIME_INTERVALS.find(x=>x.key===key);
       const label = STATE.lang==='ar' ? iv.labelAr : iv.labelEn;
       if(!confirm(t('maint_done_confirm',{name:label}))) return;
+      const cf = promptCustomFieldValues('service');
       const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
       const iso = today.toISOString().slice(0,10);
       const curH = latestHoursFor(STATE.maintGenId);
       const ok = await saveMaintDoc(STATE.maintGenId, { time: { [key]: { lastDone: iso, by: tech } } });
       if(ok){
-        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: iso, hoursAtService: curH, by: tech }]);
+        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: iso, hoursAtService: curH, by: tech }], cf);
         showToast(t('maint_done_toast'));
       }
     });
@@ -2602,6 +2624,7 @@ function bindMaintenance(){
       let msg = t('maint_done_confirm',{name:hi+' hr'});
       if(smaller.length) msg += '\n\n' + t('maint_nest_note');
       if(!confirm(msg)) return;
+      const cf = promptCustomFieldValues('service');
       const today = new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
       const iso = today.toISOString().slice(0,10);
       const doneAt = cur!==null ? cur : 0;
@@ -2612,7 +2635,7 @@ function bindMaintenance(){
       const ok = await saveMaintDoc(STATE.maintGenId, patch);
       if(ok){
         await logServicePerformed(STATE.maintGenId,
-          [hi, ...smaller].map(k=>({ kind:'hours', key:k, label:k+' hr', date: iso, hoursAtService: doneAt, by: tech })));
+          [hi, ...smaller].map(k=>({ kind:'hours', key:k, label:k+' hr', date: iso, hoursAtService: doneAt, by: tech })), cf);
         showToast(smaller.length ? t('maint_nest_done',{n:1+smaller.length}) : t('maint_done_toast'));
       }
     });
@@ -2640,9 +2663,10 @@ function bindMaintenance(){
         hVal = parseFloat(hStr);
         if(isNaN(hVal) || hVal<0){ showToast(t('maint_bad_hrs')); return; }
       }
+      const cf = promptCustomFieldValues('service');
       const ok = await saveMaintDoc(STATE.maintGenId, { time: { [key]: { lastDone: dStr, doneAtHrs: hVal, by: tech } } });
       if(ok){
-        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }]);
+        await logServicePerformed(STATE.maintGenId, [{ kind:'time', key, label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }], cf);
         showToast(t('maint_saved'));
       }
     });
@@ -2674,9 +2698,10 @@ function bindMaintenance(){
       if(dStr!=='' && (!/^\d{4}-\d{2}-\d{2}$/.test(dStr) || isNaN(new Date(dStr+'T00:00:00').getTime()))){
         showToast(t('maint_bad_date')); return;
       }
+      const cf = dStr ? promptCustomFieldValues('service') : {};
       const ok = await saveMaintDoc(STATE.maintGenId, { hours: { [String(hi)]: { doneAtHrs: hVal, date: dStr||null, by: tech } } });
       if(ok){
-        if(dStr) await logServicePerformed(STATE.maintGenId, [{ kind:'hours', key:hi, label:label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }]);
+        if(dStr) await logServicePerformed(STATE.maintGenId, [{ kind:'hours', key:hi, label:label, date: dStr, hoursAtService: hVal, by: tech, backfilled:true }], cf);
         showToast(t('maint_saved'));
       }
     });
@@ -2755,6 +2780,7 @@ function renderCorrEditForm(c){
     <label>${t('corr_photos')}</label>
     ${renderPhotoThumbs(STATE.editFaultPhotos, 'edit')}
     <input type="file" id="ce-photos" accept="image/*" multiple>
+    ${renderCustomFieldInputs('corrective', c.customFields, 'ce')}
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       <button class="btn btn-primary" data-correditsave="${c.id}">${t('corr_update')}</button>
       <button class="btn btn-outline" data-correditcancel="${c.id}">${t('corr_cancel')}</button>
@@ -2809,6 +2835,7 @@ function renderCorrective(){
       ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
       ${c.recommendations?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_recommend')}:</b> ${c.recommendations}</div>`:''}
       ${renderPhotoThumbs(c.photos, 'view', true)}
+      ${renderCustomFieldValues('corrective', c.customFields)}
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
         <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
@@ -2852,6 +2879,7 @@ function renderCorrective(){
     <label>${t('corr_photos')}</label>
     ${renderPhotoThumbs(STATE.newFaultPhotos, 'new')}
     <input type="file" id="c-photos" accept="image/*" multiple>
+    ${renderCustomFieldInputs('corrective', null, 'c')}
     <button class="btn btn-primary" id="c-save" style="margin-top:12px;">${t('corr_save')}</button>
   </div>
 
@@ -2909,6 +2937,7 @@ function bindCorrective(){
       by,
       recommendations: val('c-recommend'),
       photos: STATE.newFaultPhotos.slice(),
+      customFields: collectCustomFieldValues('corrective', 'c'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     saveBtn.disabled = true;
@@ -3005,7 +3034,8 @@ function bindCorrective(){
         downtimeHrs: num('ce-downtime'),
         by,
         recommendations: val('ce-recommend'),
-        photos: (STATE.editFaultPhotos || []).slice()
+        photos: (STATE.editFaultPhotos || []).slice(),
+        customFields: collectCustomFieldValues('corrective', 'ce')
       };
       if(patch.status==='closed'){
         const existing = STATE.corrective.find(x=>x.id===id);
@@ -3147,6 +3177,170 @@ function bindLabelsEditor(){
   });
 }
 
+/* ================= CUSTOM FIELDS (user-defined extra fields per form) ================= */
+const CF_SECTIONS = ['reading', 'corrective', 'service', 'generator'];
+const CF_TYPES = ['text', 'textarea', 'number', 'date', 'select'];
+
+function cfSectionLabel(s){ return t('cf_section_' + s); }
+function cfLabel(f){ return STATE.lang==='ar' ? (f.labelAr || f.labelEn || f.key) : (f.labelEn || f.labelAr || f.key); }
+
+function customFieldsFor(section){
+  return STATE.customFields.filter(f => f.section === section && f.active !== false);
+}
+
+function renderCustomFieldInputs(section, existingValues, idPrefix){
+  const fields = customFieldsFor(section);
+  if(!fields.length) return '';
+  const vals = existingValues || {};
+  return fields.map(f=>{
+    const val = (vals[f.key]!==undefined && vals[f.key]!==null) ? vals[f.key] : '';
+    const id = `${idPrefix}-${f.key}`;
+    let input;
+    if(f.type==='textarea') input = `<textarea id="${id}" rows="2" placeholder="—">${escHtml(val)}</textarea>`;
+    else if(f.type==='number') input = `<input type="number" step="0.1" id="${id}" value="${escHtml(val)}" placeholder="—">`;
+    else if(f.type==='date') input = `<input type="date" id="${id}" value="${escHtml(val)}">`;
+    else if(f.type==='select'){
+      const opts = (f.options||[]).map(o=>`<option value="${escHtml(o)}"${o===val?' selected':''}>${escHtml(o)}</option>`).join('');
+      input = `<select id="${id}"><option value="">—</option>${opts}</select>`;
+    }
+    else input = `<input type="text" id="${id}" value="${escHtml(val)}" placeholder="—">`;
+    return `<label>${escHtml(cfLabel(f))}</label>${input}`;
+  }).join('');
+}
+
+function collectCustomFieldValues(section, idPrefix){
+  const fields = customFieldsFor(section);
+  const out = {};
+  fields.forEach(f=>{
+    const e = document.getElementById(`${idPrefix}-${f.key}`);
+    if(e && e.value!==''){ out[f.key] = e.value; }
+  });
+  return out;
+}
+
+function promptCustomFieldValues(section){
+  const fields = customFieldsFor(section);
+  if(!fields.length) return {};
+  const out = {};
+  fields.forEach(f=>{
+    const v = prompt(cfLabel(f), '');
+    if(v!==null && v.trim()!==''){ out[f.key] = v.trim(); }
+  });
+  return out;
+}
+
+function renderCustomFieldValues(section, values){
+  if(!values) return '';
+  const fields = customFieldsFor(section);
+  return fields
+    .filter(f => values[f.key]!==undefined && values[f.key]!==null && values[f.key]!=='')
+    .map(f=>`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${escHtml(cfLabel(f))}:</b> ${escHtml(values[f.key])}</div>`)
+    .join('');
+}
+
+// Flattened "key: value; key2: value2" summary for table-style exports (CSV/Excel/PDF)
+function customFieldsSummary(section, values){
+  if(!values) return '';
+  const fields = customFieldsFor(section);
+  return fields
+    .filter(f => values[f.key]!==undefined && values[f.key]!==null && values[f.key]!=='')
+    .map(f => `${cfLabel(f)}: ${values[f.key]}`)
+    .join('; ');
+}
+
+function renderCustomFieldsEditor(){
+  const bySection = {};
+  STATE.customFields.forEach(f=>{ (bySection[f.section]=bySection[f.section]||[]).push(f); });
+  const listHtml = CF_SECTIONS.map(s=>{
+    const fields = bySection[s] || [];
+    if(!fields.length) return '';
+    const rows = fields.map(f=>{
+      const inactive = f.active===false;
+      return `<div class="cf-row${inactive?' cf-inactive':''}">
+        <div class="cf-row-label">${escHtml(cfLabel(f))} <span class="cf-type">(${t('cf_type_'+f.type)})</span>${inactive?` <span class="cf-inactive-tag">${t('cf_inactive')}</span>`:''}</div>
+        <div class="cf-row-actions">
+          <button class="btn btn-outline btn-sm" data-cftoggle="${f.id}">${inactive?t('cf_activate'):t('cf_deactivate')}</button>
+          <button class="btn btn-danger btn-sm" data-cfdel="${f.id}">${t('cf_delete')}</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="cf-section"><h4>${cfSectionLabel(s)}</h4>${rows}</div>`;
+  }).join('');
+
+  const sectionOptions = CF_SECTIONS.map(s=>`<option value="${s}">${cfSectionLabel(s)}</option>`).join('');
+  const typeOptions = CF_TYPES.map(ty=>`<option value="${ty}">${t('cf_type_'+ty)}</option>`).join('');
+
+  return `<div class="card">
+    <h3>${t('customfields_title')}</h3>
+    <div class="hint">${t('customfields_hint')}</div>
+    ${listHtml || `<div class="hint">${t('cf_none')}</div>`}
+    <label>${t('cf_section')}</label>
+    <select id="cf-section">${sectionOptions}</select>
+    <div class="grid2">
+      <div><label>${t('cf_label_ar')}</label><input type="text" id="cf-label-ar" placeholder="—"></div>
+      <div><label>${t('cf_label_en')}</label><input type="text" id="cf-label-en" placeholder="—"></div>
+    </div>
+    <label>${t('cf_type')}</label>
+    <select id="cf-type">${typeOptions}</select>
+    <div id="cf-options-wrap" style="display:none;">
+      <label>${t('cf_options')}</label>
+      <input type="text" id="cf-options" placeholder="A, B, C">
+    </div>
+    <button class="btn btn-primary" id="cf-add" style="margin-top:12px;">${t('cf_add')}</button>
+  </div>`;
+}
+
+function bindCustomFieldsEditor(){
+  const typeSel = document.getElementById('cf-type');
+  const optWrap = document.getElementById('cf-options-wrap');
+  if(typeSel) typeSel.addEventListener('change', ()=>{
+    optWrap.style.display = typeSel.value==='select' ? '' : 'none';
+  });
+
+  document.querySelectorAll('[data-cftoggle]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const f = STATE.customFields.find(x=>x.id===btn.dataset.cftoggle);
+      if(!f) return;
+      try{
+        await db.collection(CUSTOMFIELDS_COLLECTION).doc(f.id).update({ active: f.active===false ? true : false });
+      }catch(e){ console.warn('toggle custom field failed', e); showToast(t('corr_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-cfdel]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('cf_delete_confirm'))) return;
+      try{
+        await db.collection(CUSTOMFIELDS_COLLECTION).doc(btn.dataset.cfdel).delete();
+      }catch(e){ console.warn('delete custom field failed', e); showToast(t('corr_fail')); }
+    });
+  });
+
+  const addBtn = document.getElementById('cf-add');
+  if(addBtn) addBtn.addEventListener('click', async ()=>{
+    const section = document.getElementById('cf-section').value;
+    const labelAr = document.getElementById('cf-label-ar').value.trim();
+    const labelEn = document.getElementById('cf-label-en').value.trim();
+    if(!labelAr && !labelEn){ showToast(t('cf_need_label')); return; }
+    const type = document.getElementById('cf-type').value;
+    const optionsRaw = document.getElementById('cf-options').value.trim();
+    const options = type==='select' ? optionsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+    const key = 'cf_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    addBtn.disabled = true;
+    try{
+      await db.collection(CUSTOMFIELDS_COLLECTION).add({
+        section, key, labelAr, labelEn, type, options, active: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast(t('cf_added'));
+      ['cf-label-ar','cf-label-en','cf-options'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    }catch(e){
+      console.warn('add custom field failed', e);
+      showToast(t('corr_fail'));
+    }finally{ addBtn.disabled = false; }
+  });
+}
+
 function renderGenerators(){
   const rows = STATE.generators.map(g=>{
     const count = STATE.readings.filter(r=>r.genId===g.id).length;
@@ -3156,6 +3350,7 @@ function renderGenerators(){
         <div class="gname">${g.name}</div>
         <div class="gcount">${count} ${t('readings_lbl')}</div>
       </div>
+      ${renderCustomFieldValues('generator', g.customFields)}
       <div class="genrow-actions">
         <button class="btn btn-outline btn-sm" data-rename="${g.id}">${t('rename')}</button>
         <button class="btn btn-danger btn-sm" data-remove="${g.id}">${t('remove')}</button>
@@ -3178,6 +3373,7 @@ function renderGenerators(){
       <option value="FAO">FAO</option>
       <option value="Other">${t('client_other')}</option>
     </select>
+    ${renderCustomFieldInputs('generator', null, 'ng')}
     <button class="btn btn-primary" id="addGenBtn">${t('add_gen_btn')}</button>
   </div>
   <div class="card">
@@ -3198,19 +3394,22 @@ function renderGenerators(){
       support@environmsafe.com · +967 78 340 2932 · www.environmsafe.com
     </div>
   </div>
+  ${renderCustomFieldsEditor()}
   ${renderLabelsEditor()}
   `;
 }
 
 function bindGenerators(){
   bindLabelsEditor();
+  bindCustomFieldsEditor();
 
   document.getElementById('addGenBtn').addEventListener('click', async ()=>{
     const name = document.getElementById('ng-name').value.trim();
     const client = document.getElementById('ng-client').value;
     if(!name){ showToast(t('warn_genname')); return; }
+    const customFields = collectCustomFieldValues('generator', 'ng');
     try{
-      await db.collection(GENERATORS_COLLECTION).add({ name, client });
+      await db.collection(GENERATORS_COLLECTION).add({ name, client, ...(Object.keys(customFields).length ? {customFields} : {}) });
       showToast(t('added'));
     }catch(e){
       console.warn('add generator failed', e);

@@ -197,6 +197,11 @@
   .photothumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .photothumb-rm{position:absolute;top:2px;inset-inline-end:2px;background:rgba(0,0,0,.6);color:#fff;border:none;
     width:20px;height:20px;border-radius:50%;font-size:12px;line-height:1;cursor:pointer;padding:0;}
+  .lbl-cat{margin-bottom:10px;border:1px solid var(--border);border-radius:8px;padding:2px 12px;}
+  .lbl-cat summary{font-weight:700;cursor:pointer;padding:10px 0;font-size:13px;color:var(--navy);}
+  .lbl-row{border-top:1px solid var(--border);padding:8px 0;}
+  .lbl-key{font-size:10px;color:var(--muted);font-family:monospace;margin-bottom:4px;}
+  .lbl-in{width:100%;margin-bottom:6px;}
   .maint-table td{white-space:normal;vertical-align:middle;font-size:12px;padding:9px 10px;}
   .maint-table th{font-size:11px;}
   .maint-table .btn-sm{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap;}
@@ -278,6 +283,8 @@ let unsubReadings = null;
 let unsubMaint = null;
 let unsubCorr = null;
 let unsubSvc = null;
+let unsubSettings = null;
+let unsubCustomFields = null;
 
 function authReady(){
   return new Promise((resolve, reject)=>{
@@ -293,6 +300,8 @@ const READINGS_COLLECTION = 'readings';
 const MAINT_COLLECTION = 'maintenance'; // one doc per generator: baselines + last-done records
 const CORR_COLLECTION = 'corrective';   // one doc per corrective-maintenance / failure event
 const SVCLOG_COLLECTION = 'servicelog'; // permanent dated record of every service performed
+const SETTINGS_COLLECTION = 'settings'; // single doc 'labels' holding {key:{ar,en}} label overrides
+const CUSTOMFIELDS_COLLECTION = 'customfields'; // user-defined extra fields per form section
 
 // Corrective maintenance event types & severities (value keys are stable; labels are translated)
 const CORR_TYPES = ['failure','breakdown','repair','replacement','adjustment','other'];
@@ -444,6 +453,21 @@ const I18N = {
     corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل عطل',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
     rep_photos_title:'الصور المرفقة',
+    labels_title:'تخصيص النصوص والتبويبات', labels_hint:'غيّر أي نص يظهر في التطبيق (عربي/إنجليزي). اترك الحقل فارغًا لاستخدام النص الافتراضي.',
+    labels_search_ph:'بحث عن نص...', labels_save:'💾 حفظ كل التعديلات', labels_saved:'✅ تم حفظ التعديلات',
+    labels_reset:'إعادة الكل للافتراضي', labels_reset_confirm:'إعادة كل النصوص إلى الافتراضي؟', labels_reset_done:'✅ تمت إعادة الضبط',
+    labels_ar:'عربي', labels_en:'إنجليزي',
+    cat_tabs:'التبويبات', cat_tabheaders:'عناوين التبويبات', cat_faults:'تبويب الأعطال',
+    cat_maint:'تبويب الصيانة', cat_reports:'التقارير', cat_readings:'تبويب القراءات والسجل',
+    cat_warnerr:'التنبيهات والأخطاء', cat_general:'عام',
+    customfields_title:'حقول إضافية مخصّصة', customfields_hint:'أضف حقولًا جديدة إلى أي نموذج في التطبيق.',
+    cf_section:'يُضاف إلى', cf_section_reading:'قراءة جديدة', cf_section_corrective:'الأعطال',
+    cf_section_service:'تسجيل صيانة', cf_section_generator:'إضافة مولّد',
+    cf_label_ar:'التسمية (عربي)', cf_label_en:'التسمية (إنجليزي)', cf_type:'نوع الحقل',
+    cf_type_text:'نص قصير', cf_type_textarea:'نص طويل', cf_type_number:'رقم', cf_type_date:'تاريخ', cf_type_select:'قائمة اختيار',
+    cf_options:'خيارات القائمة (مفصولة بفاصلة)', cf_add:'+ إضافة حقل', cf_added:'✅ تم إضافة الحقل',
+    cf_deactivate:'إلغاء تفعيل', cf_activate:'تفعيل', cf_delete:'حذف نهائي', cf_delete_confirm:'حذف هذا الحقل نهائيًا؟ (لن يُحذف من السجلات القديمة)',
+    cf_need_label:'⚠️ أدخل تسمية للحقل بلغة واحدة على الأقل', cf_none:'لا توجد حقول مخصّصة بعد', cf_inactive:'(معطّل)',
     rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
     rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
     rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
@@ -565,6 +589,21 @@ const I18N = {
     corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per fault',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
     rep_photos_title:'Attached Photos',
+    labels_title:'Customize labels & tabs', labels_hint:'Rename any text shown in the app (Arabic/English). Leave a field blank to keep the default text.',
+    labels_search_ph:'Search text...', labels_save:'💾 Save all changes', labels_saved:'✅ Changes saved',
+    labels_reset:'Reset all to default', labels_reset_confirm:'Reset all labels to their default text?', labels_reset_done:'✅ Reset done',
+    labels_ar:'Arabic', labels_en:'English',
+    cat_tabs:'Tabs', cat_tabheaders:'Tab headers', cat_faults:'Faults tab',
+    cat_maint:'Maintenance tab', cat_reports:'Reports', cat_readings:'Readings & History tab',
+    cat_warnerr:'Warnings & errors', cat_general:'General',
+    customfields_title:'Custom fields', customfields_hint:'Add new fields to any form in the app.',
+    cf_section:'Add to', cf_section_reading:'New reading', cf_section_corrective:'Faults',
+    cf_section_service:'Log service', cf_section_generator:'Add generator',
+    cf_label_ar:'Label (Arabic)', cf_label_en:'Label (English)', cf_type:'Field type',
+    cf_type_text:'Short text', cf_type_textarea:'Long text', cf_type_number:'Number', cf_type_date:'Date', cf_type_select:'Dropdown',
+    cf_options:'Dropdown options (comma-separated)', cf_add:'+ Add field', cf_added:'✅ Field added',
+    cf_deactivate:'Deactivate', cf_activate:'Activate', cf_delete:'Delete permanently', cf_delete_confirm:'Permanently delete this field? (existing saved values are kept)',
+    cf_need_label:'⚠️ Enter a label in at least one language', cf_none:'No custom fields yet', cf_inactive:'(inactive)',
     rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
     rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
     rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
@@ -670,7 +709,8 @@ function setLang(lang){
 }
 function t(key, vars){
   const lang = STATE.lang || 'ar';
-  let s = (I18N[lang] && I18N[lang][key]) || (I18N.en[key]) || key;
+  const override = STATE.labelOverrides && STATE.labelOverrides[key] && STATE.labelOverrides[key][lang];
+  let s = (override && override.trim()) || (I18N[lang] && I18N[lang][key]) || (I18N.en[key]) || key;
   if(vars){ Object.keys(vars).forEach(k=>{ s = s.replace('{'+k+'}', vars[k]); }); }
   return s;
 }
@@ -704,6 +744,9 @@ let STATE = {
   corrEditingId: null,
   newFaultPhotos: [],
   editFaultPhotos: null,
+  labelOverrides: {},
+  customFields: [],
+  labelSearch: '',
   maintGenId: null,
   lang: 'ar',
   activeTab: 'new',
@@ -842,6 +885,8 @@ async function init(){
   if(unsubMaint) unsubMaint();
   if(unsubCorr) unsubCorr();
   if(unsubSvc) unsubSvc();
+  if(unsubSettings) unsubSettings();
+  if(unsubCustomFields) unsubCustomFields();
 
   let generatorsLoaded = false, readingsLoaded = false;
   function maybeFirstRender(){
@@ -899,6 +944,21 @@ async function init(){
     if(STATE.everRendered && (STATE.activeTab === 'maintenance' || STATE.activeTab === 'reports')) render();
   }, err=>{
     console.warn('servicelog listener error', err);
+  });
+
+  unsubSettings = db.collection(SETTINGS_COLLECTION).onSnapshot(snap=>{
+    const labelsDoc = snap.docs.find(d=>d.id==='labels');
+    STATE.labelOverrides = labelsDoc ? (labelsDoc.data() || {}) : {};
+    if(STATE.everRendered){ applyLangChrome(); render(); }
+  }, err=>{
+    console.warn('settings listener error', err);
+  });
+
+  unsubCustomFields = db.collection(CUSTOMFIELDS_COLLECTION).onSnapshot(snap=>{
+    STATE.customFields = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered) render();
+  }, err=>{
+    console.warn('customfields listener error', err);
   });
 }
 
@@ -2970,6 +3030,123 @@ function bindCorrective(){
 }
 
 /* ================= GENERATORS ================= */
+/* ================= LABEL / TEXT CUSTOMIZATION ================= */
+const LABEL_CATEGORY_PREFIXES = [
+  ['tab_', 'cat_tabs'],
+  ['title_', 'cat_tabheaders'],
+  ['sub_', 'cat_tabheaders'],
+  ['corr_', 'cat_faults'],
+  ['maint_', 'cat_maint'],
+  ['svc_', 'cat_maint'],
+  ['rep_', 'cat_reports'],
+  ['f_', 'cat_readings'],
+  ['col_', 'cat_readings'],
+  ['ph_', 'cat_readings'],
+  ['sec_', 'cat_readings'],
+  ['warn_', 'cat_warnerr'],
+  ['err_', 'cat_warnerr'],
+];
+const LABEL_CATEGORY_ORDER = ['cat_tabs','cat_tabheaders','cat_faults','cat_maint','cat_reports','cat_readings','cat_warnerr','cat_general'];
+
+function categoryForLabelKey(key){
+  for(const [prefix, cat] of LABEL_CATEGORY_PREFIXES){
+    if(key.indexOf(prefix) === 0) return cat;
+  }
+  return 'cat_general';
+}
+
+function allLabelKeys(){
+  const keys = new Set([...Object.keys(I18N.en||{}), ...Object.keys(I18N.ar||{})]);
+  return Array.from(keys).sort();
+}
+
+function labelRow(key){
+  const ov = STATE.labelOverrides[key] || {};
+  const defAr = I18N.ar[key] || '';
+  const defEn = I18N.en[key] || key;
+  return `<div class="lbl-row">
+    <div class="lbl-key">${key}</div>
+    <input type="text" class="lbl-in" data-lblkey="${key}" data-lbllang="ar" placeholder="${escHtml(defAr)}" value="${escHtml(ov.ar||'')}">
+    <input type="text" class="lbl-in" data-lblkey="${key}" data-lbllang="en" placeholder="${escHtml(defEn)}" value="${escHtml(ov.en||'')}">
+  </div>`;
+}
+
+function renderLabelsEditor(){
+  const cats = {};
+  allLabelKeys().forEach(k=>{ const c = categoryForLabelKey(k); (cats[c]=cats[c]||[]).push(k); });
+  const sections = LABEL_CATEGORY_ORDER.filter(c=>cats[c] && cats[c].length).map(c=>{
+    const keys = cats[c];
+    return `<details class="lbl-cat">
+      <summary>${t(c)} (${keys.length})</summary>
+      ${keys.map(labelRow).join('')}
+    </details>`;
+  }).join('');
+  return `<div class="card">
+    <h3>${t('labels_title')}</h3>
+    <div class="hint">${t('labels_hint')}</div>
+    <input type="text" id="lbl-search" placeholder="${t('labels_search_ph')}" style="margin-bottom:10px;">
+    <div id="lbl-sections">${sections}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="lbl-save">${t('labels_save')}</button>
+      <button class="btn btn-outline" id="lbl-reset">${t('labels_reset')}</button>
+    </div>
+  </div>`;
+}
+
+function bindLabelsEditor(){
+  const search = document.getElementById('lbl-search');
+  if(search) search.addEventListener('input', ()=>{
+    const q = search.value.trim().toLowerCase();
+    document.querySelectorAll('.lbl-row').forEach(row=>{
+      const inputs = row.querySelectorAll('.lbl-in');
+      const key = row.querySelector('.lbl-key').textContent.toLowerCase();
+      const hay = key + ' ' + inputs[0].placeholder.toLowerCase() + ' ' + inputs[1].placeholder.toLowerCase();
+      row.style.display = (!q || hay.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('.lbl-cat').forEach(det=>{
+      const anyVisible = Array.from(det.querySelectorAll('.lbl-row')).some(r=>r.style.display!=='none');
+      if(q) det.open = true;
+      det.style.display = (q && !anyVisible) ? 'none' : '';
+    });
+  });
+
+  const saveBtn = document.getElementById('lbl-save');
+  if(saveBtn) saveBtn.addEventListener('click', async ()=>{
+    const overrides = {};
+    document.querySelectorAll('.lbl-row').forEach(row=>{
+      const key = row.querySelector('.lbl-key').textContent;
+      const inputs = row.querySelectorAll('.lbl-in');
+      const arVal = inputs[0].value.trim();
+      const enVal = inputs[1].value.trim();
+      if(arVal || enVal){
+        overrides[key] = {};
+        if(arVal) overrides[key].ar = arVal;
+        if(enVal) overrides[key].en = enVal;
+      }
+    });
+    saveBtn.disabled = true;
+    try{
+      await db.collection(SETTINGS_COLLECTION).doc('labels').set(overrides);
+      showToast(t('labels_saved'));
+    }catch(e){
+      console.warn('label save failed', e);
+      showToast(t('corr_fail'));
+    }finally{ saveBtn.disabled = false; }
+  });
+
+  const resetBtn = document.getElementById('lbl-reset');
+  if(resetBtn) resetBtn.addEventListener('click', async ()=>{
+    if(!confirm(t('labels_reset_confirm'))) return;
+    try{
+      await db.collection(SETTINGS_COLLECTION).doc('labels').set({});
+      showToast(t('labels_reset_done'));
+    }catch(e){
+      console.warn('label reset failed', e);
+      showToast(t('corr_fail'));
+    }
+  });
+}
+
 function renderGenerators(){
   const rows = STATE.generators.map(g=>{
     const count = STATE.readings.filter(r=>r.genId===g.id).length;
@@ -3021,10 +3198,13 @@ function renderGenerators(){
       support@environmsafe.com · +967 78 340 2932 · www.environmsafe.com
     </div>
   </div>
+  ${renderLabelsEditor()}
   `;
 }
 
 function bindGenerators(){
+  bindLabelsEditor();
+
   document.getElementById('addGenBtn').addEventListener('click', async ()=>{
     const name = document.getElementById('ng-name').value.trim();
     const client = document.getElementById('ng-client').value;

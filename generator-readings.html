@@ -372,6 +372,11 @@ const I18N = {
     corr_open_count:'{n} عطل مفتوح',
     corr_edit:'✎ تعديل', corr_edit_title:'تعديل السجل', corr_update:'حفظ التعديلات', corr_updated:'✅ تم تحديث السجل',
     corr_cancel:'إلغاء',
+    corr_recommend:'التوصيات (اختياري)',
+    corr_print:'🖨️ طباعة PDF', corr_word:'📄 Word', corr_report_title:'تقرير عطل / صيانة تصحيحية',
+    corr_report_no:'رقم التقرير', corr_sign_eng:'مهندس EnvironmSafe المنفّذ للعمل',
+    corr_sign_client:'مشرف العميل', sign_name:'الاسم', sign_signature:'التوقيع', sign_date:'التاريخ',
+    corr_word_downloaded:'✅ تم تنزيل ملف Word',
     rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
     rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
     rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
@@ -484,6 +489,11 @@ const I18N = {
     corr_open_count:'{n} open fault(s)',
     corr_edit:'✎ Edit', corr_edit_title:'Edit record', corr_update:'Save changes', corr_updated:'✅ Record updated',
     corr_cancel:'Cancel',
+    corr_recommend:'Recommendations (optional)',
+    corr_print:'🖨️ Print PDF', corr_word:'📄 Word', corr_report_title:'Fault / Corrective Maintenance Report',
+    corr_report_no:'Report No.', corr_sign_eng:'EnvironmSafe Engineer who performed the job',
+    corr_sign_client:'Client Supervisor', sign_name:'Name', sign_signature:'Signature', sign_date:'Date',
+    corr_word_downloaded:'✅ Word file downloaded',
     rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
     rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
     rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
@@ -1995,6 +2005,133 @@ function exportReportPDF(){
   showToast(t('rep_exported'));
 }
 
+/* ================= SINGLE-FAULT OFFICIAL REPORT (print / Word) ================= */
+function escHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function faultReportBody(c){
+  const g = genById(c.genId);
+  const bi = STATE.lang==='ar';
+  const loc = bi ? 'ar' : undefined;
+  const dstr = c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '–';
+  const field = (label, value) => `
+    <div class="fld"><span class="fl">${label}</span><span class="fv">${value===undefined||value===null||value===''?'–':escHtml(value)}</span></div>`;
+  const block = (label, value) => `
+    <div class="blk"><div class="bl">${label}</div><div class="bv">${value?escHtml(value).replace(/\n/g,'<br>'):'&nbsp;'}</div></div>`;
+
+  return `
+    <div class="hdr">
+      <img src="${REPORT_LOGO_B64}" alt="logo">
+      <div>
+        <div class="t">${t('corr_report_title')}</div>
+        <div class="s">EnvironmSafe — Engineering, Trading &amp; Services Ltd.  ·  +967 78 340 2932  ·  www.environmsafe.com</div>
+      </div>
+    </div>
+    <div class="fldgrid">
+      ${field(t('corr_report_no'), c.id)}
+      ${field(t('corr_gen'), g?g.name:'–')}
+      ${field('Client', g?g.client:'–')}
+      ${field(t('corr_date'), dstr)}
+      ${field(t('corr_type'), corrTypeLabel(c.type||'other'))}
+      ${field(t('corr_sev'), corrSevLabel(c.severity||'low'))}
+      ${field(t('corr_status'), corrStatusLabel(c.status||'open'))}
+      ${field(t('corr_hours'), c.hoursAtEvent)}
+      ${field(t('corr_downtime'), c.downtimeHrs)}
+      ${field(t('corr_by'), c.by)}
+    </div>
+    ${block(t('corr_desc'), c.description)}
+    ${block(t('corr_action'), c.actionTaken)}
+    ${block(t('corr_parts'), c.partsUsed)}
+    ${block(t('corr_recommend'), c.recommendations)}
+    <div class="signrow">
+      <div class="signbox">
+        <div class="signtitle">${t('corr_sign_eng')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+      <div class="signbox">
+        <div class="signtitle">${t('corr_sign_client')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+    </div>`;
+}
+
+const FAULT_REPORT_CSS = `
+    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1E2430;margin:0;}
+    .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #C49A2A;padding-bottom:10px;margin-bottom:14px;}
+    .hdr img{height:52px;}
+    .hdr .t{font-size:18px;font-weight:800;color:#1B2A4A;}
+    .hdr .s{font-size:10.5px;color:#6B7280;}
+    .fldgrid{display:flex;flex-wrap:wrap;gap:0;border:1px solid #C9CED6;margin-bottom:10px;}
+    .fld{width:33.33%;border-bottom:1px solid #E4E7EC;padding:6px 8px;font-size:11px;display:flex;gap:6px;}
+    .fl{font-weight:700;color:#1B2A4A;white-space:nowrap;}
+    .fv{color:#1E2430;}
+    .blk{border:1px solid #C9CED6;margin-bottom:10px;}
+    .bl{background:#1B2A4A;color:#fff;font-weight:700;font-size:11px;padding:5px 8px;}
+    .bv{padding:8px;font-size:11.5px;min-height:32px;}
+    .signrow{display:flex;gap:16px;margin-top:26px;}
+    .signbox{flex:1;border-top:1px solid #1B2A4A;padding-top:8px;}
+    .signtitle{font-weight:700;font-size:11.5px;color:#1B2A4A;margin-bottom:10px;}
+    .signline{font-size:11px;margin-bottom:16px;}
+`;
+
+function printFaultReport(id){
+  const c = STATE.corrective.find(x=>x.id===id);
+  if(!c) return;
+  const bi = STATE.lang==='ar';
+  const dir = bi ? 'rtl' : 'ltr';
+  const html = `<!DOCTYPE html><html lang="${bi?'ar':'en'}" dir="${dir}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('corr_report_title')}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm; }
+    ${FAULT_REPORT_CSS}
+    @media print{.noprint{display:none;}}
+    .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
+  </style></head><body>
+    <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
+    ${faultReportBody(c)}
+    <script>setTimeout(function(){window.print();}, 400);<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ showToast(bi?'⚠️ اسمح بالنوافذ المنبثقة':'⚠️ Allow pop-ups to export PDF'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+function exportFaultWord(id){
+  const c = STATE.corrective.find(x=>x.id===id);
+  if(!c) return;
+  const bi = STATE.lang==='ar';
+  const dir = bi ? 'rtl' : 'ltr';
+  const g = genById(c.genId);
+  const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40" lang="${bi?'ar':'en'}" dir="${dir}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('corr_report_title')}</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+  <style>
+    @page Section1 { size: 21cm 29.7cm; margin: 2cm; }
+    div.Section1 { page: Section1; }
+    ${FAULT_REPORT_CSS}
+  </style></head><body>
+    <div class="Section1">${faultReportBody(c)}</div>
+  </body></html>`;
+
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeName = (g?g.name:'generator').replace(/[^a-zA-Z0-9_-]+/g,'_');
+  a.download = `EnvironmSafe_Fault_${safeName}_${c.date||new Date().toISOString().slice(0,10)}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('corr_word_downloaded'));
+}
+
 /* ================= MAINTENANCE (time-based #4 + hours-based #5) ================= */
 // Maintenance doc shape (per generator, id = genId):
 //   { hrsPerDay: number|null,
@@ -2460,6 +2597,8 @@ function renderCorrEditForm(c){
     <input type="text" id="ce-parts" value="${esc(c.partsUsed)}" placeholder="—">
     <label>${t('corr_by')}</label>
     <input type="text" id="ce-by" value="${esc(c.by)}" placeholder="—">
+    <label>${t('corr_recommend')}</label>
+    <textarea id="ce-recommend" rows="2" placeholder="—">${esc(c.recommendations)}</textarea>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       <button class="btn btn-primary" data-correditsave="${c.id}">${t('corr_update')}</button>
       <button class="btn btn-outline" data-correditcancel="${c.id}">${t('corr_cancel')}</button>
@@ -2511,10 +2650,13 @@ function renderCorrective(){
       ${c.actionTaken?`<div style="font-size:12px;margin-top:5px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_action')}:</b> ${c.actionTaken}</div>`:''}
       ${c.partsUsed?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_parts')}:</b> ${c.partsUsed}</div>`:''}
       ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
+      ${c.recommendations?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_recommend')}:</b> ${c.recommendations}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
         <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
         <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>
+        <button class="btn btn-outline btn-sm" data-corrprint="${c.id}">${t('corr_print')}</button>
+        <button class="btn btn-outline btn-sm" data-corrword="${c.id}">${t('corr_word')}</button>
       </div>
     </div>`;
   }).join('') : `<div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div>`;
@@ -2545,6 +2687,8 @@ function renderCorrective(){
     <input type="text" id="c-parts" placeholder="—">
     <label>${t('corr_by')}</label>
     <input type="text" id="c-by" placeholder="—">
+    <label>${t('corr_recommend')}</label>
+    <textarea id="c-recommend" rows="2" placeholder="—"></textarea>
     <button class="btn btn-primary" id="c-save" style="margin-top:12px;">${t('corr_save')}</button>
   </div>
 
@@ -2583,13 +2727,14 @@ function bindCorrective(){
       partsUsed: val('c-parts'),
       downtimeHrs: num('c-downtime'),
       by,
+      recommendations: val('c-recommend'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     saveBtn.disabled = true;
     try{
       await db.collection(CORR_COLLECTION).add(rec);
       showToast(t('corr_saved'));
-      ['c-desc','c-action','c-parts','c-hours','c-downtime'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+      ['c-desc','c-action','c-parts','c-hours','c-downtime','c-recommend'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
       render();
     }catch(e){
       console.warn('corrective save failed', e);
@@ -2625,6 +2770,14 @@ function bindCorrective(){
         showToast(t('corr_saved'));
       }catch(e){ console.warn(e); showToast(t('corr_fail')); }
     });
+  });
+
+  document.querySelectorAll('[data-corrprint]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ printFaultReport(btn.dataset.corrprint); });
+  });
+
+  document.querySelectorAll('[data-corrword]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ exportFaultWord(btn.dataset.corrword); });
   });
 
   document.querySelectorAll('[data-corredit]').forEach(btn=>{
@@ -2663,7 +2816,8 @@ function bindCorrective(){
         actionTaken: val('ce-action'),
         partsUsed: val('ce-parts'),
         downtimeHrs: num('ce-downtime'),
-        by
+        by,
+        recommendations: val('ce-recommend')
       };
       if(patch.status==='closed'){
         const existing = STATE.corrective.find(x=>x.id===id);

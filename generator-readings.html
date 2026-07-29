@@ -459,6 +459,8 @@ const I18N = {
     corr_sign_client:'مشرف العميل', sign_name:'الاسم', sign_signature:'التوقيع', sign_date:'التاريخ',
     corr_word_downloaded:'✅ تم تنزيل ملف Word',
     corr_fault_id:'رقم العطل', corr_short_desc:'وصف مختصر',
+    corr_backfill_notice:'{n} عطل قديم بدون رقم عطل بعد.', corr_backfill_btn:'تعيين أرقام الأعطال الآن',
+    corr_backfill_done:'✅ تم تعيين {n} رقم عطل',
     corr_causes:'أسباب العطل', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
     corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل عطل',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
@@ -596,6 +598,8 @@ const I18N = {
     corr_sign_client:'Client Supervisor', sign_name:'Name', sign_signature:'Signature', sign_date:'Date',
     corr_word_downloaded:'✅ Word file downloaded',
     corr_fault_id:'Fault ID', corr_short_desc:'Short description',
+    corr_backfill_notice:'{n} old fault(s) don’t have a Fault ID yet.', corr_backfill_btn:'Assign Fault IDs now',
+    corr_backfill_done:'✅ Assigned {n} Fault ID(s)',
     corr_causes:'Causes of the fault', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
     corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per fault',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
@@ -2750,6 +2754,29 @@ function nextFaultSeq(){
   return nums.length ? Math.max(...nums)+1 : FAULT_ID_START;
 }
 
+function faultsWithoutId(){
+  return STATE.corrective.filter(c => typeof c.faultSeq !== 'number' || isNaN(c.faultSeq));
+}
+
+// One-time, user-triggered backfill for faults saved before Fault IDs existed. Assigns IDs
+// in chronological order (oldest first) so numbering still reads sensibly, starting from
+// whatever nextFaultSeq() already is — never reassigns a fault that already has an ID.
+async function backfillFaultIds(){
+  const missing = faultsWithoutId().slice().sort((a,b)=>{
+    const d = String(a.date||'').localeCompare(String(b.date||''));
+    return d !== 0 ? d : String(a.id).localeCompare(String(b.id));
+  });
+  let seq = nextFaultSeq();
+  let okCount = 0;
+  for(const c of missing){
+    try{
+      await db.collection(CORR_COLLECTION).doc(c.id).update({ faultSeq: seq, faultId: FAULT_ID_PREFIX + seq });
+      seq++; okCount++;
+    }catch(e){ console.warn('fault id backfill failed for', c.id, e); }
+  }
+  return okCount;
+}
+
 function renderPhotoThumbs(photos, prefix, readOnly){
   if(!photos || !photos.length) return '';
   return `<div class="photothumbs">` + photos.map((durl,i)=>`
@@ -2821,6 +2848,13 @@ function renderCorrective(){
       <div style="font-size:13.5px;font-weight:600;">${t('st_over')} ${t('corr_open_count',{n:openN})}</div>
     </div>` : '';
 
+  const missingIdN = faultsWithoutId().length;
+  const backfillNotice = missingIdN ? `
+    <div class="card" style="padding:12px 16px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">${t('corr_backfill_notice',{n:missingIdN})}</div>
+      <button class="btn btn-primary btn-sm" id="corr-backfill-btn">${t('corr_backfill_btn')}</button>
+    </div>` : '';
+
   const genOptions = STATE.generators.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
   const typeOptions = CORR_TYPES.map(v=>`<option value="${v}">${corrTypeLabel(v)}</option>`).join('');
   const sevOptions = CORR_SEVERITY.map(v=>`<option value="${v}"${v==='medium'?' selected':''}>${corrSevLabel(v)}</option>`).join('');
@@ -2869,6 +2903,7 @@ function renderCorrective(){
 
   return `
   ${summary}
+  ${backfillNotice}
   <div class="card">
     <h3>${t('corr_new')}</h3>
     <div class="fault-id-badge">${t('corr_fault_id')}: ${FAULT_ID_PREFIX}${nextFaultSeq()}</div>
@@ -2918,6 +2953,18 @@ function renderCorrective(){
 function bindCorrective(){
   document.querySelectorAll('[data-corrfilter]').forEach(ch=>{
     ch.addEventListener('click', ()=>{ STATE.corrFilter = ch.dataset.corrfilter; render(); });
+  });
+
+  const backfillBtn = document.getElementById('corr-backfill-btn');
+  if(backfillBtn) backfillBtn.addEventListener('click', async ()=>{
+    backfillBtn.disabled = true;
+    try{
+      const n = await backfillFaultIds();
+      showToast(t('corr_backfill_done',{n}));
+    }catch(e){
+      console.warn('fault id backfill failed', e);
+      showToast(t('corr_fail'));
+    }finally{ backfillBtn.disabled = false; }
   });
 
   const cPhotos = document.getElementById('c-photos');

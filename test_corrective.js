@@ -162,6 +162,25 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,`STATE.corrective = [{id:'x1'},{id:'x2',faultSeq:null}];`);
   check('faults with no faultSeq (legacy records) are ignored, not treated as 0', run(sb,`nextFaultSeq()`)===813);
 
+  console.log('\n=== Backfilling Fault IDs onto legacy records ===');
+  run(sb,`
+    STATE.corrective = [
+      {id:'old2', date:'2026-02-01'},
+      {id:'old1', date:'2026-01-01'},
+      {id:'hasOne', date:'2026-03-01', faultSeq:900, faultId:'Cor-900'}
+    ];
+  `);
+  check('faultsWithoutId finds only the legacy records', run(sb,`faultsWithoutId().length`)===2);
+  const backfilled = await run(sb,`backfillFaultIds()`);
+  await new Promise(r=>setTimeout(r,20));
+  check('backfillFaultIds reports how many it assigned', backfilled===2, 'got '+backfilled);
+  const updatedIds = sb.__updated.filter(u=>u.col==='corrective');
+  check('backfill writes went to the two legacy docs', updatedIds.length===2, JSON.stringify(updatedIds));
+  const byDocId = {}; updatedIds.forEach(u=>byDocId[u.id]=u.data);
+  check('older fault (old1, Jan) gets the lower number', byDocId.old1 && byDocId.old1.faultId==='Cor-901', JSON.stringify(byDocId.old1));
+  check('newer fault (old2, Feb) gets the next number', byDocId.old2 && byDocId.old2.faultId==='Cor-902', JSON.stringify(byDocId.old2));
+  check('the already-numbered fault was left untouched', !byDocId.hasOne);
+
   console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);
   process.exit(fail?1:0);
 })();

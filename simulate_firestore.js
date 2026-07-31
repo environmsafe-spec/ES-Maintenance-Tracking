@@ -129,23 +129,48 @@ function makeBackendV2() {
   };
 }
 
+// The app now requires a real signed-in account (email/password) rather than auto-anonymous
+// sign-in, so these mocks simulate "a technician is already logged in" by default — these
+// suites are about seeding/sync/persistence/permission-diagnostics, not the login screen
+// itself (that's covered separately). Pass opts.authAlwaysFails to simulate the auth SERVICE
+// itself erroring (e.g. misconfiguration), which is the new analogous failure mode.
 function makeFirebaseMock(backend, opts={}) {
-  let authUser = null;
+  let authUser = (opts.startLoggedOut || opts.authAlwaysFails) ? null : { uid: 'sim-' + Math.random().toString(36).slice(2), email: 'admin@test.local' };
   const authCallbacks = [];
+  const apps = {};
+  function makeAuthInstance(){
+    let user = authUser;
+    return {
+      get currentUser(){ return user; },
+      onAuthStateChanged(cb, errCb) {
+        authCallbacks.push(cb);
+        if (opts.authAlwaysFails) { setTimeout(() => errCb && errCb(new Error('auth failed (simulated)')), 0); return () => {}; }
+        setTimeout(() => cb(user), 0);
+        return () => {};
+      },
+      async signInWithEmailAndPassword(email, password) {
+        user = { uid: 'sim-' + Math.random().toString(36).slice(2), email };
+        authUser = user;
+        authCallbacks.forEach(cb => cb(user));
+        return { user };
+      },
+      async signOut() { user = null; authUser = null; authCallbacks.forEach(cb => cb(null)); },
+    };
+  }
   return {
-    initializeApp(cfg) { /* no-op */ },
+    initializeApp(cfg, name) {
+      const key = name || '[DEFAULT]';
+      if (!apps[key]) apps[key] = makeAuthInstance();
+      return { name: key, auth: () => apps[key] };
+    },
+    app(name) {
+      const key = name || '[DEFAULT]';
+      if (!apps[key]) apps[key] = makeAuthInstance();
+      return { name: key, auth: () => apps[key] };
+    },
     auth() {
-      return {
-        onAuthStateChanged(cb) {
-          authCallbacks.push(cb);
-          setTimeout(() => cb(authUser), 0);
-        },
-        async signInAnonymously() {
-          if (opts.authAlwaysFails) throw new Error('auth failed (simulated)');
-          authUser = { uid: 'sim-' + Math.random().toString(36).slice(2) };
-          authCallbacks.forEach(cb => cb(authUser));
-        },
-      };
+      if (!apps['[DEFAULT]']) apps['[DEFAULT]'] = makeAuthInstance();
+      return apps['[DEFAULT]'];
     },
     firestore() {
       const db = backend;

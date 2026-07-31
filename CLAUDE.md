@@ -7,14 +7,23 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 
 ## WHAT — the app
 - **Single file:** `generator-readings.html` (~185 KB). Everything — HTML, CSS, JS — is inline in that one file. There is no build step.
-- **Backend:** Firebase Firestore (anonymous auth, offline persistence, real-time multi-device sync).
+- **Backend:** Firebase Firestore (email/password auth with two roles, offline persistence, real-time multi-device sync).
 - **Hosting:** Netlify (drag-and-drop deploy of the single HTML file as `index.html`).
 - **Libraries** (all via CDN, no npm): Chart.js, Firebase 10.14.1 compat SDKs, SheetJS (xlsx) 0.18.5.
 
+### Auth & roles
+- The app requires a real sign-in (Firebase email/password) — there is no anonymous access anymore. `renderLoginScreen()`/`bindLoginScreen()` handle the login form; `startAuthListener()` (in place of the old `authReady()`) drives everything off `auth.onAuthStateChanged`.
+- Two roles, stored in the `users` collection (doc id = the account's Firebase Auth UID): `{ email, role: 'admin'|'viewer' }`. `STATE.isAdmin` (`STATE.userRole === 'admin'`) gates every write-capable UI element — see `viewonly_notice` usage throughout the render functions. **The real security boundary is `firestore-rules.txt`, not the UI** — the UI hiding is just good UX; rules use a `get()` lookup on the caller's own `users/{uid}` doc to decide `isAdmin()`.
+- Setup → **Manage users** (admin-only) creates new accounts via `createUserWithEmailAndPassword` on a **secondary Firebase app instance** (`secondaryAuth()`) — calling that on the default app instance would silently sign the current admin out and in as the new user, which is a well-known Firebase client-SDK gotcha. Passwords are typed directly into that form and are never stored, logged, or seen by anyone but Firebase Auth itself.
+- **Bootstrapping the very first admin is a one-time MANUAL step** (documented below) — there is deliberately no self-service "become admin" path in the rules, since that would be a privilege-escalation hole.
+
 ### Firebase project
 - Project id: `generators-readings`
-- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`, `settings` (label overrides, single doc `labels`), `customfields` (user-defined extra fields)
+- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`, `settings` (label overrides, single doc `labels`), `customfields` (user-defined extra fields), `users` (`{email, role}` per Firebase Auth UID — role source of truth)
 - **CRITICAL:** every collection must be listed in Firestore security rules or writes silently fail with "Could not save — check connection". The current rules are in `firestore-rules.txt`. Whenever you add a new collection, you MUST update those rules and the user must publish them in the Firebase console.
+- **Two manual, one-time Firebase Console steps the user (not you) must do** — you cannot do either remotely:
+  1. **Enable the Email/Password sign-in provider**: Firebase Console → Authentication → Sign-in method → enable "Email/Password". Without this, every login attempt fails with `auth/operation-not-allowed`.
+  2. **Create the first admin account**: (a) In Authentication → Users, add a user with the email/password of your choice. (b) Copy that user's UID. (c) In Firestore Database, create a document at `users/<that UID>` with fields `email` (string, matching) and `role` (string, exactly `admin`). After that, log into the app with those credentials and use Setup → Manage users to create every other account (including any future admins) — no more manual Firestore document creation needed after this one time.
 
 ### Live URLs
 - App (primary/custom domain): https://environmsafe.com
@@ -37,7 +46,7 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
    - Every logged/back-filled service also writes a permanent record to `servicelog` (the audit trail).
 5. **Faults (corrective)** — every fault gets an auto-assigned serial **Fault ID** (`Cor-813`, `Cor-814`, ...; see `nextFaultSeq()` — derived from the highest `faultSeq` already in `STATE.corrective`, no separate counter doc needed). Also logs: short description, full description, type, severity, status, hours-at-event, causes of fault, action, parts, downtime, recommendations (optional), by, up to 4 photos (client-side compressed, stored as base64 in the doc). Status cycles open→in_progress→closed. Colour-coded severity. **Every field can be edited at any status** via the ✎ Edit button on each fault card (not just status) — editing never changes the Fault ID. Each fault also has **🖨️ Print PDF** and **📄 Word** buttons that generate an official single-fault report (logo header, Fault ID, all fields, photos appended at the end, and signature blocks for the EnvironmSafe engineer + client supervisor).
 6. **Dashboard** — per-generator latest-status cards, trend charts, and a service+faults summary card.
-7. **Setup** — add/rename/remove generators; contact card; **Custom fields** panel (add new fields — text/long text/number/date/dropdown — to the New Reading, Faults, Log Service, or Add Generator forms; deactivate/delete without losing historical data); **Labels** panel (rename any text/tab/label in the app, per-language, grouped by section with search).
+7. **Setup** — account card (current user + role + logout); add/rename/remove generators (admin only); **Manage users** panel (admin only — create new admin/viewer accounts, promote/demote); **Custom fields** panel (add new fields — text/long text/number/date/dropdown — to the New Reading, Faults, Log Service, or Add Generator forms; deactivate/delete without losing historical data); **Labels** panel (rename any text/tab/label in the app, per-language, grouped by section with search). The Custom fields, Labels, and Manage users panels are admin-only; viewers see only the account card + read-only generator list.
 
 ## HOW — conventions you MUST follow
 - **Keep it one single HTML file.** Do not split into modules or add a build system unless the user explicitly asks. The whole workflow depends on drag-and-drop of one file.
@@ -63,7 +72,7 @@ Node test suites live alongside the HTML (they extract the inline `<script>` and
 Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields; do node $f.js; done`
 All suites must print `0 failed`. If you add a feature, add tests for it.
 
-For UI changes, a Playwright headless check at 412×892 (mock Firebase, since the real one is network-gated in CI) catches overflow/console errors. See `firebase_mock_init.js` for the seed/mock.
+For UI changes, a Playwright headless check at 412×892 (mock Firebase, since the real one is network-gated in CI) catches overflow/console errors. See `firebase_mock_init.js` for the seed/mock — it pre-seeds two accounts for exercising both roles: `admin@test.local` / `admin123` (role `admin`) and `viewer@test.local` / `viewer123` (role `viewer`), plus supports named secondary app instances (`firebase.initializeApp(config, 'secondary')`) so the Manage Users create-account flow can be tested without logging the test session out. The Node test suites' own inline mocks (in each `test_*.js`) always simulate an already-authenticated `{uid:'x'}` user via `onAuthStateChanged` — app start-up is deliberately NOT gated on role resolution (any signed-in user reaches the main app; `STATE.isAdmin` only gates write UI, resolved asynchronously), so none of those suites needed to change for the auth rework, other than seeding a `users` collection where a test cares about `STATE.isAdmin`-gated behavior specifically.
 
 ## Deploy
 1. Commit the updated `generator-readings.html` (and `netlify.toml` if it changes) to `main` and push.

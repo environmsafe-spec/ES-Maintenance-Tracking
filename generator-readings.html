@@ -104,6 +104,7 @@
     box-shadow:0 -2px 10px rgba(0,0,0,0.06);
     padding-bottom:env(safe-area-inset-bottom);
   }
+  body.logged-out nav.tabbar{display:none;}
   nav.tabbar button{
     flex:1;min-width:0;background:none;border:none;padding:8px 1px 7px;
     display:flex;flex-direction:column;align-items:center;gap:2px;
@@ -296,13 +297,53 @@ let unsubCorr = null;
 let unsubSvc = null;
 let unsubSettings = null;
 let unsubCustomFields = null;
+let unsubUsers = null;
+let authListenerAttached = false;
 
-function authReady(){
-  return new Promise((resolve, reject)=>{
-    auth.onAuthStateChanged(user=>{
-      if(user){ resolve(user); return; }
-      auth.signInAnonymously().catch(reject);
-    }, reject);
+// Named secondary Firebase app instance used only for admin-initiated user creation,
+// so createUserWithEmailAndPassword() doesn't sign the current admin out (a well-known
+// quirk of the client SDK: creating a user signs the *current app instance* in as them).
+function secondaryAuth(){
+  let app2;
+  try{ app2 = firebase.app('secondary'); }
+  catch(e){ app2 = firebase.initializeApp(firebaseConfig, 'secondary'); }
+  return app2.auth();
+}
+
+function setLoggedOutChrome(loggedOut){
+  const b = document.body;
+  if(b && b.classList && b.classList.toggle) b.classList.toggle('logged-out', loggedOut);
+}
+
+function startAuthListener(){
+  if(authListenerAttached) return;
+  authListenerAttached = true;
+  auth.onAuthStateChanged(user=>{
+    if(unsubUsers){ unsubUsers(); unsubUsers = null; }
+    if(!user){
+      STATE.authUser = null;
+      STATE.userRole = null;
+      STATE.isAdmin = false;
+      STATE.everRendered = false;
+      STATE.listenersStarted = false;
+      setLoggedOutChrome(true);
+      renderLoginScreen();
+      return;
+    }
+    setLoggedOutChrome(false);
+    STATE.authUser = { uid: user.uid, email: user.email };
+    // Any signed-in account can view (read rules are open); role only gates write UI/rules.
+    unsubUsers = db.collection('users').onSnapshot(snap=>{
+      STATE.allUsers = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+      const doc = snap.docs.find(d=>d.id===user.uid);
+      STATE.userRole = doc ? doc.data().role : null;
+      STATE.isAdmin = STATE.userRole === 'admin';
+      if(STATE.everRendered) render();
+    }, err=>{ console.warn('users listener error', err); });
+    startAppListeners();
+  }, err=>{
+    console.warn('auth state error', err);
+    showConnectError(err);
   });
 }
 
@@ -480,6 +521,18 @@ const I18N = {
     cf_options:'خيارات القائمة (مفصولة بفاصلة)', cf_add:'+ إضافة حقل', cf_added:'✅ تم إضافة الحقل',
     cf_deactivate:'إلغاء تفعيل', cf_activate:'تفعيل', cf_delete:'حذف نهائي', cf_delete_confirm:'حذف هذا الحقل نهائيًا؟ (لن يُحذف من السجلات القديمة)',
     cf_need_label:'⚠️ أدخل تسمية للحقل بلغة واحدة على الأقل', cf_none:'لا توجد حقول مخصّصة بعد', cf_inactive:'(معطّل)',
+    login_title:'تسجيل الدخول', login_email:'البريد الإلكتروني', login_password:'كلمة المرور',
+    login_btn:'دخول', login_signing_in:'...جارٍ الدخول', login_need_fields:'⚠️ أدخل البريد الإلكتروني وكلمة المرور',
+    login_err_invalid:'⚠️ البريد الإلكتروني أو كلمة المرور غير صحيحة', login_err_toomany:'⚠️ محاولات كثيرة جدًا — حاول لاحقًا',
+    login_err_generic:'⚠️ تعذّر تسجيل الدخول', logout_btn:'تسجيل الخروج', logout_confirm:'تسجيل الخروج؟',
+    role_admin:'مدير (كل الصلاحيات)', role_viewer:'مشاهدة فقط', role_none:'بدون صلاحية — تواصل مع المدير',
+    viewonly_notice:'👁️ عرض فقط — سجّل الدخول كمدير لإجراء تعديلات.',
+    users_title:'إدارة المستخدمين', users_hint:'أنشئ حسابات جديدة بصلاحية كاملة أو للعرض فقط. كلمة المرور تُكتب هنا مباشرة ولا تُحفظ أو تُرسل لأي جهة.',
+    users_new_email:'البريد الإلكتروني للمستخدم الجديد', users_new_password:'كلمة المرور (6 أحرف على الأقل)',
+    users_role:'الصلاحية', users_add_btn:'+ إنشاء مستخدم', users_added:'✅ تم إنشاء المستخدم',
+    users_need_fields:'⚠️ أدخل بريدًا إلكترونيًا وكلمة مرور (6 أحرف على الأقل)',
+    users_err_exists:'⚠️ هذا البريد الإلكتروني مستخدم بالفعل', users_list:'المستخدمون الحاليون',
+    users_make_admin:'ترقية لمدير', users_make_viewer:'تخفيض لعرض فقط', users_you:'(أنت)',
     rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
     rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
     rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
@@ -619,6 +672,18 @@ const I18N = {
     cf_options:'Dropdown options (comma-separated)', cf_add:'+ Add field', cf_added:'✅ Field added',
     cf_deactivate:'Deactivate', cf_activate:'Activate', cf_delete:'Delete permanently', cf_delete_confirm:'Permanently delete this field? (existing saved values are kept)',
     cf_need_label:'⚠️ Enter a label in at least one language', cf_none:'No custom fields yet', cf_inactive:'(inactive)',
+    login_title:'Sign in', login_email:'Email', login_password:'Password',
+    login_btn:'Sign in', login_signing_in:'Signing in...', login_need_fields:'⚠️ Enter your email and password',
+    login_err_invalid:'⚠️ Incorrect email or password', login_err_toomany:'⚠️ Too many attempts — try again later',
+    login_err_generic:'⚠️ Could not sign in', logout_btn:'Log out', logout_confirm:'Log out?',
+    role_admin:'Administrator (full access)', role_viewer:'Viewer (view only)', role_none:'No access yet — contact your administrator',
+    viewonly_notice:'👁️ View only — sign in as an administrator to make changes.',
+    users_title:'Manage users', users_hint:'Create new full-access or view-only accounts. The password is typed here directly and is never stored or sent anywhere by this app.',
+    users_new_email:'New user\'s email', users_new_password:'Password (min. 6 characters)',
+    users_role:'Role', users_add_btn:'+ Create user', users_added:'✅ User created',
+    users_need_fields:'⚠️ Enter an email and a password (min. 6 characters)',
+    users_err_exists:'⚠️ That email is already in use', users_list:'Current users',
+    users_make_admin:'Promote to admin', users_make_viewer:'Demote to viewer', users_you:'(you)',
     rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
     rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
     rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
@@ -769,6 +834,13 @@ let STATE = {
   dashGenId: null,
   charts: {},
   everRendered: false,
+  listenersStarted: false,
+  authUser: null,
+  userRole: null,
+  isAdmin: false,
+  loginError: '',
+  manageUsersForm: { email:'', role:'viewer' },
+  allUsers: [],
   reportGenId: null,
   reportMode: 'range',   // 'day' or 'range'
   reportDay: '',
@@ -867,6 +939,50 @@ function describeConnectError(err){
   return t('err_generic') + (code ? ' (' + code + ')' : '');
 }
 
+function renderLoginScreen(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div class="card" style="max-width:360px;margin:40px auto;">
+    <h3 style="text-align:center;">${t('login_title')}</h3>
+    <label>${t('login_email')}</label>
+    <input type="email" id="login-email" autocomplete="username" placeholder="name@example.com">
+    <label>${t('login_password')}</label>
+    <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••">
+    ${STATE.loginError ? `<div class="flagline" style="margin-top:8px;">${STATE.loginError}</div>` : ''}
+    <button class="btn btn-primary" id="login-btn" style="margin-top:14px;">${t('login_btn')}</button>
+  </div>`;
+  bindLoginScreen();
+}
+
+function bindLoginScreen(){
+  const btn = document.getElementById('login-btn');
+  const emailEl = document.getElementById('login-email');
+  const passEl = document.getElementById('login-password');
+  const submit = async ()=>{
+    const email = (emailEl.value||'').trim();
+    const password = passEl.value||'';
+    if(!email || !password){ STATE.loginError = t('login_need_fields'); renderLoginScreen(); return; }
+    btn.disabled = true; btn.textContent = t('login_signing_in');
+    try{
+      await auth.signInWithEmailAndPassword(email, password);
+      STATE.loginError = '';
+    }catch(e){
+      console.warn('sign-in failed', e);
+      const code = e && e.code;
+      if(code==='auth/invalid-credential' || code==='auth/wrong-password' || code==='auth/user-not-found' || code==='auth/invalid-email'){
+        STATE.loginError = t('login_err_invalid');
+      } else if(code==='auth/too-many-requests'){
+        STATE.loginError = t('login_err_toomany');
+      } else {
+        STATE.loginError = t('login_err_generic') + (code?' ('+code+')':'');
+      }
+      renderLoginScreen();
+    }
+  };
+  if(btn) btn.addEventListener('click', submit);
+  if(passEl) passEl.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
+
 function showConnectError(err){
   if(STATE.everRendered) return;
   const app = document.getElementById('app');
@@ -875,17 +991,12 @@ function showConnectError(err){
     <button class="btn btn-primary" style="width:auto;padding:12px 22px;" onclick="init()">${t('try_again')}</button></div>`;
 }
 
-async function init(){
+async function startAppListeners(){
+  if(STATE.listenersStarted) return;
+  STATE.listenersStarted = true;
+
   const app = document.getElementById('app');
   app.innerHTML = `<div class="empty"><div class="em-ic">⏳</div>${t('connecting')}</div>`;
-
-  try{
-    await authReady();
-  }catch(e){
-    console.warn('auth failed', e);
-    showConnectError(e);
-    return;
-  }
 
   try{
     await seedDefaultGeneratorsIfEmpty();
@@ -977,6 +1088,11 @@ async function init(){
   });
 }
 
+function init(){
+  startAuthListener();
+  if(auth.currentUser) startAppListeners();
+}
+
 /* ---------------- Tab switching ---------------- */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -1034,6 +1150,9 @@ function nowLocalDatetime(){
 function renderNewForm(){
   if(!STATE.generators.length){
     return `<div class="card empty"><div class="em-ic">🔌</div>${t('no_gens')}</div>`;
+  }
+  if(!STATE.isAdmin){
+    return `<div class="card"><div class="hint">${t('viewonly_notice')}</div></div>`;
   }
   const genOptions = STATE.generators.map(g=>`<option value="${g.id}">${g.name} · ${g.client}</option>`).join('');
   return `
@@ -1105,11 +1224,15 @@ function renderNewForm(){
 }
 
 async function bindNewForm(){
+  const techEl = document.getElementById('f-tech');
+  const saveBtn = document.getElementById('saveBtn');
+  if(!techEl || !saveBtn) return; // view-only: form wasn't rendered
+
   let lastTech = null;
   try{ lastTech = localStorage.getItem(TECH_LOCAL_KEY); }catch(e){}
-  if(lastTech) document.getElementById('f-tech').value = lastTech;
+  if(lastTech) techEl.value = lastTech;
 
-  document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  saveBtn.addEventListener('click', async ()=>{
     const gen = document.getElementById('f-gen').value;
     const tech = document.getElementById('f-tech').value.trim();
     const dt = document.getElementById('f-datetime').value;
@@ -1215,7 +1338,7 @@ function renderHistory(){
           ${t('f_rpm')} ${r.rpm||'-'}
         </div>
         ${renderCustomFieldValues('reading', r.customFields)}
-        <button class="btn btn-danger btn-sm" style="margin-top:10px;" data-del="${r.id}">${t('delete_reading')}</button>
+        ${STATE.isAdmin ? `<button class="btn btn-danger btn-sm" style="margin-top:10px;" data-del="${r.id}">${t('delete_reading')}</button>` : ''}
       </details>
     </div>`;
   }).join('');
@@ -2441,9 +2564,9 @@ function renderMaintenance(){
       <td>${statusDot(s.state)} <b>${label}</b></td>
       <td>${last}</td>
       <td>${due}</td>
-      <td>
+      <td>${STATE.isAdmin ? `
         <button class="btn btn-outline btn-sm" data-mdone-time="${iv.key}">${t('maint_mark_done')}</button>
-        <button class="btn btn-outline btn-sm" data-medit-time="${iv.key}" style="margin-top:4px;">${t('maint_edit')}</button>
+        <button class="btn btn-outline btn-sm" data-medit-time="${iv.key}" style="margin-top:4px;">${t('maint_edit')}</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -2477,9 +2600,9 @@ function renderMaintenance(){
       <td>${lastHrs}${lastDateStr}</td>
       <td>${dueHrs}</td>
       <td>${dueDate}</td>
-      <td>
+      <td>${STATE.isAdmin ? `
         <button class="btn btn-outline btn-sm" data-mdone-hr="${hi}">${t('maint_mark_done')}</button>
-        <button class="btn btn-outline btn-sm" data-medit-hr="${hi}" style="margin-top:4px;">${t('maint_edit')}</button>
+        <button class="btn btn-outline btn-sm" data-medit-hr="${hi}" style="margin-top:4px;">${t('maint_edit')}</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -2498,7 +2621,7 @@ function renderMaintenance(){
     </div>
     <div class="hint" style="margin-bottom:4px;">${curHrsLine}</div>
     <label style="margin-top:8px;">${t('maint_hrs_per_day')} <span class="unit">${t('maint_hrs_per_day_hint')}</span></label>
-    <input type="number" step="0.5" min="0" max="24" id="m-hrsperday" value="${m.hrsPerDay!==undefined&&m.hrsPerDay!==null?m.hrsPerDay:''}" placeholder="24">
+    <input type="number" step="0.5" min="0" max="24" id="m-hrsperday" value="${m.hrsPerDay!==undefined&&m.hrsPerDay!==null?m.hrsPerDay:''}" placeholder="24"${STATE.isAdmin?'':' disabled'}>
     <div class="hint" style="margin-top:4px;">${t('maint_hrs_per_day_note')}</div>
   </div>
 
@@ -2541,7 +2664,7 @@ function recentServicesCard(genId){
       <td>${(x.hoursAtService!==undefined&&x.hoursAtService!==null)?x.hoursAtService:'—'}</td>
       <td>${x.by||'—'}${x.backfilled?`<br><span style="font-size:10px;color:var(--muted)">${t('svc_backfilled')}</span>`:''}
         ${renderCustomFieldValues('service', x.customFields)}</td>
-      <td><button class="btn btn-outline btn-sm" data-svcdel="${x.id}">${t('corr_delete')}</button></td>
+      <td>${STATE.isAdmin ? `<button class="btn btn-outline btn-sm" data-svcdel="${x.id}">${t('corr_delete')}</button>` : ''}</td>
     </tr>`).join('');
   return `
   <div class="card">
@@ -2849,7 +2972,7 @@ function renderCorrective(){
     </div>` : '';
 
   const missingIdN = faultsWithoutId().length;
-  const backfillNotice = missingIdN ? `
+  const backfillNotice = (STATE.isAdmin && missingIdN) ? `
     <div class="card" style="padding:12px 16px;">
       <div style="font-size:13px;font-weight:600;margin-bottom:8px;">${t('corr_backfill_notice',{n:missingIdN})}</div>
       <button class="btn btn-primary btn-sm" id="corr-backfill-btn">${t('corr_backfill_btn')}</button>
@@ -2892,18 +3015,16 @@ function renderCorrective(){
       ${renderPhotoThumbs(c.photos, 'view', true)}
       ${renderCustomFieldValues('corrective', c.customFields)}
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
+        ${STATE.isAdmin ? `<button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
         <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
-        <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>
+        <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>` : ''}
         <button class="btn btn-outline btn-sm" data-corrprint="${c.id}">${t('corr_print')}</button>
         <button class="btn btn-outline btn-sm" data-corrword="${c.id}">${t('corr_word')}</button>
       </div>
     </div>`;
   }).join('') : `<div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div>`;
 
-  return `
-  ${summary}
-  ${backfillNotice}
+  const newFaultForm = !STATE.isAdmin ? '' : `
   <div class="card">
     <h3>${t('corr_new')}</h3>
     <div class="fault-id-badge">${t('corr_fault_id')}: ${FAULT_ID_PREFIX}${nextFaultSeq()}</div>
@@ -2940,7 +3061,12 @@ function renderCorrective(){
     <input type="file" id="c-photos" accept="image/*" multiple>
     ${renderCustomFieldInputs('corrective', null, 'c')}
     <button class="btn btn-primary" id="c-save" style="margin-top:12px;">${t('corr_save')}</button>
-  </div>
+  </div>`;
+
+  return `
+  ${summary}
+  ${backfillNotice}
+  ${newFaultForm}
 
   <div class="card">
     <div class="rowbetween" style="margin-bottom:8px;"><h3 style="margin:0;">${t('corr_list')}</h3></div>
@@ -3417,6 +3543,79 @@ function bindCustomFieldsEditor(){
   });
 }
 
+/* ================= MANAGE USERS (admin only) ================= */
+function roleLabel(role){
+  if(role==='admin') return t('role_admin');
+  if(role==='viewer') return t('role_viewer');
+  return t('role_none');
+}
+
+function renderManageUsersPanel(){
+  if(!STATE.isAdmin) return '';
+  const rows = STATE.allUsers.slice().sort((a,b)=> (a.email||'').localeCompare(b.email||'')).map(u=>{
+    const isMe = STATE.authUser && u.id===STATE.authUser.uid;
+    const toggleLabel = u.role==='admin' ? t('users_make_viewer') : t('users_make_admin');
+    return `<div class="cf-row">
+      <div class="cf-row-label">${escHtml(u.email||u.id)} <span class="cf-type">${roleLabel(u.role)}</span>${isMe?` <span class="cf-type">${t('users_you')}</span>`:''}</div>
+      <div class="cf-row-actions">
+        <button class="btn btn-outline btn-sm" data-usertoggle="${u.id}" data-userrole="${u.role==='admin'?'viewer':'admin'}">${toggleLabel}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <h3>${t('users_title')}</h3>
+    <div class="hint">${t('users_hint')}</div>
+    <label>${t('users_new_email')}</label>
+    <input type="email" id="nu-email" placeholder="name@example.com">
+    <label>${t('users_new_password')}</label>
+    <input type="password" id="nu-password" placeholder="••••••••">
+    <label>${t('users_role')}</label>
+    <select id="nu-role">
+      <option value="viewer">${t('role_viewer')}</option>
+      <option value="admin">${t('role_admin')}</option>
+    </select>
+    <button class="btn btn-primary" id="nu-add" style="margin-top:12px;">${t('users_add_btn')}</button>
+    <h3 style="margin-top:18px;">${t('users_list')}</h3>
+    ${rows || `<div class="hint">${t('cf_none')}</div>`}
+  </div>`;
+}
+
+function bindManageUsersPanel(){
+  const addBtn = document.getElementById('nu-add');
+  if(addBtn) addBtn.addEventListener('click', async ()=>{
+    const email = (document.getElementById('nu-email').value||'').trim();
+    const password = document.getElementById('nu-password').value||'';
+    const role = document.getElementById('nu-role').value;
+    if(!email || password.length < 6){ showToast(t('users_need_fields')); return; }
+    addBtn.disabled = true;
+    try{
+      const sAuth = secondaryAuth();
+      const cred = await sAuth.createUserWithEmailAndPassword(email, password);
+      await db.collection('users').doc(cred.user.uid).set({
+        email, role, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await sAuth.signOut();
+      showToast(t('users_added'));
+      document.getElementById('nu-email').value = '';
+      document.getElementById('nu-password').value = '';
+    }catch(e){
+      console.warn('create user failed', e);
+      showToast(e && e.code==='auth/email-already-in-use' ? t('users_err_exists') : t('login_err_generic'));
+    }finally{ addBtn.disabled = false; }
+  });
+
+  document.querySelectorAll('[data-usertoggle]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const uid = btn.dataset.usertoggle;
+      const newRole = btn.dataset.userrole;
+      try{
+        await db.collection('users').doc(uid).update({ role: newRole });
+      }catch(e){ console.warn('role update failed', e); showToast(t('corr_fail')); }
+    });
+  });
+}
+
 function renderGenerators(){
   const rows = STATE.generators.map(g=>{
     const count = STATE.readings.filter(r=>r.genId===g.id).length;
@@ -3427,18 +3626,25 @@ function renderGenerators(){
         <div class="gcount">${count} ${t('readings_lbl')}</div>
       </div>
       ${renderCustomFieldValues('generator', g.customFields)}
-      <div class="genrow-actions">
+      ${STATE.isAdmin ? `<div class="genrow-actions">
         <button class="btn btn-outline btn-sm" data-rename="${g.id}">${t('rename')}</button>
         <button class="btn btn-danger btn-sm" data-remove="${g.id}">${t('remove')}</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('');
 
-  return `
+  const accountCard = `
   <div class="card">
-    <h3>${t('your_gens',{n:STATE.generators.length})}</h3>
-    ${rows || `<div class="hint">${t('no_gens')}</div>`}
-  </div>
+    <div class="rowbetween" style="align-items:center;">
+      <div>
+        <div style="font-weight:700;font-size:13px;">${STATE.authUser ? escHtml(STATE.authUser.email) : ''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${roleLabel(STATE.userRole)}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" id="logout-btn">${t('logout_btn')}</button>
+    </div>
+  </div>`;
+
+  const addGenForm = !STATE.isAdmin ? '' : `
   <div class="card">
     <h3>${t('add_gen')}</h3>
     <label class="req">${t('gen_name')}</label>
@@ -3451,7 +3657,16 @@ function renderGenerators(){
     </select>
     ${renderCustomFieldInputs('generator', null, 'ng')}
     <button class="btn btn-primary" id="addGenBtn">${t('add_gen_btn')}</button>
+  </div>`;
+
+  return `
+  ${accountCard}
+  ${!STATE.isAdmin ? `<div class="card"><div class="hint">${t('viewonly_notice')}</div></div>` : ''}
+  <div class="card">
+    <h3>${t('your_gens',{n:STATE.generators.length})}</h3>
+    ${rows || `<div class="hint">${t('no_gens')}</div>`}
   </div>
+  ${addGenForm}
   <div class="card">
     <h3>${t('data_sync')}</h3>
     <div class="hint">${t('data_sync_body')}</div>
@@ -3470,16 +3685,24 @@ function renderGenerators(){
       support@environmsafe.com · +967 78 340 2932 · www.environmsafe.com
     </div>
   </div>
-  ${renderCustomFieldsEditor()}
-  ${renderLabelsEditor()}
+  ${renderManageUsersPanel()}
+  ${STATE.isAdmin ? renderCustomFieldsEditor() : ''}
+  ${STATE.isAdmin ? renderLabelsEditor() : ''}
   `;
 }
 
 function bindGenerators(){
-  bindLabelsEditor();
-  bindCustomFieldsEditor();
+  const logoutBtn = document.getElementById('logout-btn');
+  if(logoutBtn) logoutBtn.addEventListener('click', async ()=>{
+    if(!confirm(t('logout_confirm'))) return;
+    try{ await auth.signOut(); }catch(e){ console.warn('sign-out failed', e); }
+  });
 
-  document.getElementById('addGenBtn').addEventListener('click', async ()=>{
+  if(STATE.isAdmin){ bindManageUsersPanel(); bindLabelsEditor(); bindCustomFieldsEditor(); }
+
+  const addGenBtn = document.getElementById('addGenBtn');
+  if(!addGenBtn) return;
+  addGenBtn.addEventListener('click', async ()=>{
     const name = document.getElementById('ng-name').value.trim();
     const client = document.getElementById('ng-client').value;
     if(!name){ showToast(t('warn_genname')); return; }

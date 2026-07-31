@@ -7,43 +7,99 @@
     const snap = { docs, empty: docs.length===0 };
     (listeners[name]||new Set()).forEach(cb=>cb(snap));
   }
+
+  function makeDb(){
+    return {
+      collection(name){
+        collections[name] = collections[name] || {};
+        listeners[name] = listeners[name] || new Set();
+        return {
+          onSnapshot(cb){ listeners[name].add(cb); setTimeout(()=>notify(name),0); return ()=>listeners[name].delete(cb); },
+          async add(data){ const id='auto'+(idCounter++); collections[name][id]={...data}; notify(name); return {id}; },
+          doc(id){
+            return {
+              __collection:name, __id:id,
+              async set(data){ collections[name][id]={...data}; notify(name); },
+              async update(data){ collections[name][id]={...(collections[name][id]||{}),...data}; notify(name); },
+              async delete(){ delete collections[name][id]; notify(name); },
+            };
+          },
+          limit(n){ return { async get(){ const e=Object.entries(collections[name]).slice(0,n); return {empty:e.length===0, docs:e.map(([id,data])=>({id,data:()=>({...data})}))}; } }; },
+        };
+      },
+      batch(){
+        const ops=[];
+        return { set(ref,data){ ops.push({name:ref.__collection,id:ref.__id,data}); }, async commit(){ ops.forEach(({name,id,data})=>{ collections[name][id]={...data}; }); Object.keys(collections).forEach(notify); } };
+      },
+      async enablePersistence(){},
+    };
+  }
+
+  // --- Fake Auth: an in-memory user store shared by all app instances (default + secondary),
+  // matching real Firebase where every app instance in a project shares the same user pool. ---
+  const userStore = {}; // uid -> {uid, email, password}
+  let uidCounter = 1;
+
+  function makeAuth(){
+    let currentUser = null;
+    const stateListeners = [];
+    function fire(){ stateListeners.forEach(cb=>setTimeout(()=>cb(currentUser),0)); }
+    return {
+      get currentUser(){ return currentUser; },
+      onAuthStateChanged(cb, errCb){ stateListeners.push(cb); setTimeout(()=>cb(currentUser),0); return ()=>{ const i=stateListeners.indexOf(cb); if(i>=0) stateListeners.splice(i,1); }; },
+      async signInAnonymously(){ currentUser = { uid:'anon'+(uidCounter++), email:null }; fire(); return { user: currentUser }; },
+      async signInWithEmailAndPassword(email, password){
+        const found = Object.values(userStore).find(u=>u.email===email);
+        if(!found || found.password !== password){ const e=new Error('invalid credentials'); e.code='auth/invalid-credential'; throw e; }
+        currentUser = { uid: found.uid, email: found.email };
+        fire();
+        return { user: currentUser };
+      },
+      async createUserWithEmailAndPassword(email, password){
+        if(Object.values(userStore).some(u=>u.email===email)){ const e=new Error('email in use'); e.code='auth/email-already-in-use'; throw e; }
+        const uid = 'u'+(uidCounter++);
+        userStore[uid] = { uid, email, password };
+        currentUser = { uid, email };
+        fire();
+        return { user: currentUser };
+      },
+      async signOut(){ currentUser = null; fire(); },
+    };
+  }
+
+  const apps = {};
+  function getOrCreateApp(name){
+    const key = name || '[DEFAULT]';
+    if(!apps[key]) apps[key] = { authInstance: makeAuth() };
+    return apps[key];
+  }
+
+  const sharedDb = makeDb();
+
   window.firebase = {
-    initializeApp(){},
-    auth(){
-      return {
-        onAuthStateChanged(cb){ setTimeout(()=>cb({uid:'sim'}),0); },
-        async signInAnonymously(){},
-      };
+    initializeApp(config, name){
+      const app = getOrCreateApp(name);
+      return { name: name || '[DEFAULT]', auth: ()=>app.authInstance };
     },
-    firestore(){
-      const db = {
-        collection(name){
-          collections[name] = collections[name] || {};
-          listeners[name] = listeners[name] || new Set();
-          return {
-            onSnapshot(cb){ listeners[name].add(cb); setTimeout(()=>notify(name),0); return ()=>listeners[name].delete(cb); },
-            async add(data){ const id='auto'+(idCounter++); collections[name][id]={...data}; notify(name); return {id}; },
-            doc(id){
-              return {
-                __collection:name, __id:id,
-                async set(data){ collections[name][id]={...data}; notify(name); },
-                async update(data){ collections[name][id]={...(collections[name][id]||{}),...data}; notify(name); },
-                async delete(){ delete collections[name][id]; notify(name); },
-              };
-            },
-            limit(n){ return { async get(){ const e=Object.entries(collections[name]).slice(0,n); return {empty:e.length===0, docs:e.map(([id,data])=>({id,data:()=>({...data})}))}; } }; },
-          };
-        },
-        batch(){
-          const ops=[];
-          return { set(ref,data){ ops.push({name:ref.__collection,id:ref.__id,data}); }, async commit(){ ops.forEach(({name,id,data})=>{ collections[name][id]={...data}; }); Object.keys(collections).forEach(notify); } };
-        },
-        async enablePersistence(){},
-      };
-      return db;
+    app(name){
+      const key = name || '[DEFAULT]';
+      if(!apps[key]) throw new Error('No firebase app named "'+key+'"');
+      return { name:key, auth: ()=>apps[key].authInstance };
     },
+    auth(){ return getOrCreateApp(null).authInstance; },
+    firestore(){ return sharedDb; },
   };
   window.firebase.firestore.FieldValue = { serverTimestamp: ()=> new Date().toISOString() };
+
+  // Seed one admin and one viewer account so Playwright tests can log in as either
+  // without needing the (not-yet-built) real signup flow.
+  userStore['admin-uid'] = { uid:'admin-uid', email:'admin@test.local', password:'admin123' };
+  userStore['viewer-uid'] = { uid:'viewer-uid', email:'viewer@test.local', password:'viewer123' };
+  uidCounter = 3;
+  collections['users'] = {
+    'admin-uid': { email:'admin@test.local', role:'admin' },
+    'viewer-uid': { email:'viewer@test.local', role:'viewer' },
+  };
 
   // pre-seed a couple of sample readings for a populated screenshot
   collections['generators'] = {

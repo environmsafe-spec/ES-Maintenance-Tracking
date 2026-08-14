@@ -105,9 +105,9 @@
     padding-bottom:env(safe-area-inset-bottom);
   }
   nav.tabbar button{
-    flex:1;min-width:0;background:none;border:none;padding:8px 1px 7px;
+    flex:1;min-width:0;background:none;border:none;padding:8px 0 7px;
     display:flex;flex-direction:column;align-items:center;gap:2px;
-    color:var(--muted);font-size:9.5px;font-weight:600;cursor:pointer;
+    color:var(--muted);font-size:9px;font-weight:600;cursor:pointer;
   }
   nav.tabbar button span:not(.ic){
     max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -213,6 +213,55 @@
   .cf-type{font-weight:400;color:var(--muted);font-size:11px;}
   .cf-inactive-tag{color:var(--bad);font-size:11px;}
   .cf-row-actions{display:flex;gap:6px;}
+  /* ---- Billing: price list, billable lines, invoices ---- */
+  .pill-draft{background:#EEF0F4;color:#4A5468;}
+  .pill-sent{background:#E7EEFB;color:#2255A4;}
+  .pill-partly_paid{background:#FEF5E0;color:#8A6D1F;}
+  .pill-paid{background:#E7F6EC;color:#1E7A43;}
+  .pill-cancelled{background:#F1F1F1;color:#8A8F98;text-decoration:line-through;}
+
+  .money{font-variant-numeric:tabular-nums;direction:ltr;display:inline-block;white-space:nowrap;}
+
+  .linetable{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 4px;}
+  .linetable th{background:#F5F6F8;color:var(--navy);font-weight:700;font-size:10.5px;
+    padding:6px 7px;text-align:start;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.2px;}
+  .linetable td{padding:7px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .linetable td.num{text-align:end;white-space:nowrap;}
+  .linetable tr.line-service td{background:#FBFCFE;}
+  .linetable .line-ref{font-family:monospace;font-size:10.5px;color:var(--muted);display:block;}
+  .linetable .line-rm{background:none;border:none;color:var(--bad);font-size:15px;line-height:1;
+    cursor:pointer;padding:2px 6px;min-height:32px;}
+  .line-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+
+  .totbox{border-top:2px solid var(--navy);margin-top:8px;padding-top:8px;}
+  .totrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;}
+  .totrow.grand{font-size:15px;font-weight:800;color:var(--navy);border-top:1px solid var(--border);
+    margin-top:5px;padding-top:7px;}
+  .totrow.due{color:var(--bad);font-weight:800;}
+  .totrow.paidrow{color:var(--ok);font-weight:700;}
+
+  .inv-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:10px;
+    border-inline-start:5px solid var(--navy);}
+  .inv-card.st-paid{border-inline-start-color:var(--ok);}
+  .inv-card.st-cancelled{border-inline-start-color:#C9CED6;opacity:.72;}
+  .inv-card.st-partly_paid{border-inline-start-color:var(--gold);}
+  .inv-no{display:inline-block;font-size:11px;font-weight:800;color:var(--navy);background:#F5F6F8;
+    border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin-bottom:6px;font-family:monospace;}
+
+  .pl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+    border-top:1px solid var(--border);padding:8px 0;}
+  .pl-row.pl-inactive{opacity:.6;}
+  .pl-name{font-size:12.5px;font-weight:600;flex:1;min-width:120px;}
+  .pl-price{font-size:12.5px;font-weight:800;color:var(--navy);}
+  .pl-actions{display:flex;gap:6px;}
+
+  .pickrow{display:flex;align-items:flex-start;gap:9px;border-top:1px solid var(--border);padding:9px 2px;}
+  .pickrow input[type=checkbox]{width:20px;height:20px;margin:2px 0 0;flex-shrink:0;}
+  .pickrow-main{flex:1;min-width:0;font-size:12.5px;}
+  .pickrow-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .pickrow-amt{font-size:12.5px;font-weight:800;color:var(--navy);white-space:nowrap;}
+  .pickrow.is-invoiced{opacity:.55;}
+
   .maint-table td{white-space:normal;vertical-align:middle;font-size:12px;padding:9px 10px;}
   .maint-table th{font-size:11px;}
   .maint-table .btn-sm{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap;}
@@ -263,6 +312,7 @@
   <button class="tab-btn" data-tab="reports"><span class="ic">📄</span><span data-tabkey="tab_reports">Reports</span></button>
   <button class="tab-btn" data-tab="maintenance"><span class="ic">🛠️</span><span data-tabkey="tab_maint">Service</span></button>
   <button class="tab-btn" data-tab="corrective"><span class="ic">⚠️</span><span data-tabkey="tab_corr">Faults</span></button>
+  <button class="tab-btn" data-tab="invoices"><span class="ic">🧾</span><span data-tabkey="tab_invoices">Invoices</span></button>
   <button class="tab-btn" data-tab="dashboard"><span class="ic">📊</span><span data-tabkey="tab_dashboard">Dashboard</span></button>
   <button class="tab-btn" data-tab="generators"><span class="ic">⚙️</span><span data-tabkey="tab_setup">Setup</span></button>
 </nav>
@@ -296,6 +346,8 @@ let unsubCorr = null;
 let unsubSvc = null;
 let unsubSettings = null;
 let unsubCustomFields = null;
+let unsubPricelist = null;
+let unsubInvoices = null;
 
 function authReady(){
   return new Promise((resolve, reject)=>{
@@ -313,6 +365,21 @@ const CORR_COLLECTION = 'corrective';   // one doc per corrective-maintenance / 
 const SVCLOG_COLLECTION = 'servicelog'; // permanent dated record of every service performed
 const SETTINGS_COLLECTION = 'settings'; // single doc 'labels' holding {key:{ar,en}} label overrides
 const CUSTOMFIELDS_COLLECTION = 'customfields'; // user-defined extra fields per form section
+const PRICELIST_COLLECTION = 'pricelist';   // goods catalogue: one doc per item {name, unit, unitPrice}
+const INVOICES_COLLECTION = 'invoices';     // one doc per invoice, with its line items embedded
+
+// Billing
+const BILLING_DOC = 'billing';              // settings/billing -> { serviceRate, currency }
+const DEFAULT_SERVICE_RATE = 180;           // USD charged per fault or per scheduled service
+const DEFAULT_CURRENCY = 'USD';
+const INVOICE_ID_PREFIX = 'INV-';
+const INVOICE_ID_START = 1001;
+const INVOICE_STATUS = ['draft','sent','partly_paid','paid','cancelled'];
+// A line is either the labour/service charge for one job, or a goods item.
+// sourceType tells us where it came from so a job is never billed twice:
+//   'fault'   -> STATE.corrective doc id     'service' -> STATE.svclog doc id
+//   'manual'  -> typed straight onto the invoice (e.g. parts supplied to stock)
+const INVOICE_LINE_KINDS = ['service','good'];
 
 // Corrective maintenance event types & severities (value keys are stable; labels are translated)
 const CORR_TYPES = ['failure','breakdown','repair','replacement','adjustment','other'];
@@ -464,12 +531,72 @@ const I18N = {
     corr_causes:'أسباب العطل', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
     corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل عطل',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
+    corr_billing:'البنود القابلة للفوترة',
+    corr_service_fee:'أجرة الخدمة/الزيارة',
+    corr_billing_hint:'أضف قطع الغيار والمواد المستخدمة بأسعارها. تظهر تلقائيًا عند إنشاء الفاتورة.',
+    corr_billable_total:'إجمالي قابل للفوترة',
+
+    tab_invoices:'الفواتير',
+    title_invoices:'الفواتير', sub_invoices:'فوترة الخدمات وقطع الغيار ومتابعة التحصيل',
+
+    inv_new:'+ فاتورة جديدة', inv_list:'الفواتير', inv_none:'لا توجد فواتير بعد',
+    inv_no:'رقم الفاتورة', inv_client:'العميل', inv_gen:'المولّد', inv_date:'تاريخ الفاتورة',
+    inv_due_date:'تاريخ الاستحقاق', inv_ref:'مرجع العميل / أمر الشراء', inv_notes:'ملاحظات',
+    inv_all_gens:'كل المولّدات', inv_client_pick:'اختر العميل',
+    inv_status:'حالة الفاتورة',
+    inv_st_draft:'مسودة', inv_st_sent:'مرسلة', inv_st_partly_paid:'مدفوعة جزئيًا',
+    inv_st_paid:'مدفوعة', inv_st_cancelled:'ملغاة',
+    inv_lines:'بنود الفاتورة', inv_line_desc:'البيان', inv_line_kind:'النوع', inv_line_qty:'الكمية',
+    inv_line_price:'سعر الوحدة', inv_line_total:'الإجمالي',
+    inv_kind_service:'خدمة', inv_kind_good:'صنف',
+    inv_subtotal:'المجموع الفرعي', inv_discount:'الخصم', inv_total:'الإجمالي المستحق',
+    inv_paid_amount:'المبلغ المدفوع', inv_balance:'الرصيد المتبقي', inv_paid_date:'تاريخ السداد',
+    inv_pick_work:'الأعمال غير المفوترة', inv_pick_hint:'اختر الأعطال والصيانات المراد فوترتها في هذه الفاتورة.',
+    inv_pick_none:'لا توجد أعمال غير مفوترة لهذا العميل.',
+    inv_already:'مفوترة سابقًا', inv_show_invoiced:'إظهار الأعمال المفوترة',
+    inv_add_goods:'إضافة أصناف', inv_from_list:'من قائمة الأسعار', inv_custom_item:'صنف خارج القائمة',
+    inv_item:'الصنف', inv_qty:'الكمية', inv_unit_price:'سعر الوحدة', inv_add_line:'+ إضافة البند',
+    inv_need_item:'⚠️ أدخل اسم الصنف', inv_need_price:'⚠️ أدخل سعر الوحدة',
+    inv_need_client:'⚠️ اختر العميل', inv_need_lines:'⚠️ أضف بندًا واحدًا على الأقل',
+    inv_save:'حفظ الفاتورة', inv_saved:'✅ تم حفظ الفاتورة', inv_updated:'✅ تم تحديث الفاتورة',
+    inv_fail:'⚠️ تعذّر الحفظ — تحقق من الاتصال',
+    inv_edit:'✎ تعديل', inv_edit_title:'تعديل الفاتورة', inv_update:'حفظ التعديلات', inv_cancel:'إلغاء',
+    inv_delete:'حذف', inv_del_confirm:'حذف هذه الفاتورة نهائيًا؟',
+    inv_print:'🖨️ طباعة PDF', inv_word:'📄 Word',
+    inv_report_title:'فاتورة', inv_bill_to:'فاتورة إلى',
+    inv_sign_prepared:'إعداد — EnvironmSafe', inv_sign_received:'استلام العميل',
+    inv_thanks:'شكرًا لتعاملكم مع EnvironmSafe.',
+    inv_terms:'الشروط: تُدفع المبالغ بالدولار الأمريكي. يُرجى ذكر رقم الفاتورة عند السداد.',
+    inv_filter_all:'الكل', inv_filter_unpaid:'غير مدفوعة', inv_filter_paid:'مدفوعة',
+    inv_sum_invoiced:'إجمالي المفوتر', inv_sum_paid:'المحصّل', inv_sum_outstanding:'المستحق',
+    inv_overdue_tag:'متأخرة السداد',
+    inv_mark_status:'تغيير الحالة', inv_record_payment:'تسجيل دفعة',
+    inv_payment_prompt:'المبلغ المدفوع (بالدولار):',
+    inv_src_fault:'عطل', inv_src_service:'صيانة', inv_src_manual:'إضافة يدوية',
+    inv_line_from_fault:'خدمة إصلاح عطل', inv_line_from_service:'خدمة صيانة دورية',
+    inv_stock_hint:'يمكنك إضافة أي صنف حتى لو لم يُستخدم في إصلاح — مثل توريد قطع للمخزون.',
+
+    pl_title:'قائمة أسعار الأصناف', pl_hint:'الأصناف وأسعارها. يمكن دائمًا إضافة صنف خارج القائمة عند الفوترة.',
+    pl_none:'لا توجد أصناف بعد.',
+    pl_name_ar:'اسم الصنف (عربي)', pl_name_en:'اسم الصنف (إنجليزي)',
+    pl_unit:'الوحدة', pl_price:'السعر (دولار)', pl_add:'إضافة الصنف',
+    pl_need_name:'⚠️ أدخل اسم الصنف', pl_added:'✅ تمت إضافة الصنف',
+    pl_edit:'✎ تعديل', pl_activate:'تفعيل', pl_deactivate:'إيقاف', pl_delete:'حذف',
+    pl_del_confirm:'حذف هذا الصنف من قائمة الأسعار؟', pl_inactive:'موقوف',
+    pl_price_prompt:'السعر الجديد بالدولار:', pl_name_prompt:'اسم الصنف:',
+    pl_unit_each:'قطعة',
+
+    bill_title:'إعدادات الفوترة', bill_hint:'أجرة الخدمة الافتراضية لكل عطل أو صيانة، والعملة.',
+    bill_service_rate:'أجرة الخدمة الواحدة', bill_currency:'العملة', bill_save:'حفظ الإعدادات',
+    bill_saved:'✅ تم حفظ إعدادات الفوترة',
+
+    rep_invoices:'الفواتير', rep_invoices_title:'تقرير الفواتير',
     rep_photos_title:'الصور المرفقة',
     labels_title:'تخصيص النصوص والتبويبات', labels_hint:'غيّر أي نص يظهر في التطبيق (عربي/إنجليزي). اترك الحقل فارغًا لاستخدام النص الافتراضي.',
     labels_search_ph:'بحث عن نص...', labels_save:'💾 حفظ كل التعديلات', labels_saved:'✅ تم حفظ التعديلات',
     labels_reset:'إعادة الكل للافتراضي', labels_reset_confirm:'إعادة كل النصوص إلى الافتراضي؟', labels_reset_done:'✅ تمت إعادة الضبط',
     labels_ar:'عربي', labels_en:'إنجليزي',
-    cat_tabs:'التبويبات', cat_tabheaders:'عناوين التبويبات', cat_faults:'تبويب الأعطال',
+    cat_tabs:'التبويبات', cat_tabheaders:'عناوين التبويبات', cat_faults:'تبويب الأعطال', cat_billing:'الفوترة والأسعار',
     cat_maint:'تبويب الصيانة', cat_reports:'التقارير', cat_readings:'تبويب القراءات والسجل',
     cat_warnerr:'التنبيهات والأخطاء', cat_general:'عام',
     customfields_title:'حقول إضافية مخصّصة', customfields_hint:'أضف حقولًا جديدة إلى أي نموذج في التطبيق.',
@@ -603,12 +730,72 @@ const I18N = {
     corr_causes:'Causes of the fault', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
     corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per fault',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
+    corr_billing:'Billable items',
+    corr_service_fee:'Service / call-out fee',
+    corr_billing_hint:'Add the parts and materials used, with their prices. They flow into the invoice automatically.',
+    corr_billable_total:'Billable total',
+
+    tab_invoices:'Invoices',
+    title_invoices:'Invoices', sub_invoices:'Bill services and goods, and follow up on payment',
+
+    inv_new:'+ New invoice', inv_list:'Invoices', inv_none:'No invoices yet',
+    inv_no:'Invoice No.', inv_client:'Client', inv_gen:'Generator', inv_date:'Invoice date',
+    inv_due_date:'Due date', inv_ref:'Client reference / PO', inv_notes:'Notes',
+    inv_all_gens:'All generators', inv_client_pick:'Select client',
+    inv_status:'Invoice status',
+    inv_st_draft:'Draft', inv_st_sent:'Sent', inv_st_partly_paid:'Partly paid',
+    inv_st_paid:'Paid', inv_st_cancelled:'Cancelled',
+    inv_lines:'Invoice lines', inv_line_desc:'Description', inv_line_kind:'Type', inv_line_qty:'Qty',
+    inv_line_price:'Unit price', inv_line_total:'Total',
+    inv_kind_service:'Service', inv_kind_good:'Goods',
+    inv_subtotal:'Subtotal', inv_discount:'Discount', inv_total:'Total due',
+    inv_paid_amount:'Amount paid', inv_balance:'Balance', inv_paid_date:'Payment date',
+    inv_pick_work:'Un-invoiced work', inv_pick_hint:'Tick the faults and services to bill on this invoice.',
+    inv_pick_none:'No un-invoiced work for this client.',
+    inv_already:'Already invoiced', inv_show_invoiced:'Show already-invoiced work',
+    inv_add_goods:'Add goods', inv_from_list:'From price list', inv_custom_item:'Item not on the list',
+    inv_item:'Item', inv_qty:'Qty', inv_unit_price:'Unit price', inv_add_line:'+ Add line',
+    inv_need_item:'⚠️ Enter the item name', inv_need_price:'⚠️ Enter the unit price',
+    inv_need_client:'⚠️ Select the client', inv_need_lines:'⚠️ Add at least one line',
+    inv_save:'Save invoice', inv_saved:'✅ Invoice saved', inv_updated:'✅ Invoice updated',
+    inv_fail:'⚠️ Could not save — check connection',
+    inv_edit:'✎ Edit', inv_edit_title:'Edit invoice', inv_update:'Save changes', inv_cancel:'Cancel',
+    inv_delete:'Delete', inv_del_confirm:'Delete this invoice permanently?',
+    inv_print:'🖨️ Print PDF', inv_word:'📄 Word',
+    inv_report_title:'Invoice', inv_bill_to:'Bill to',
+    inv_sign_prepared:'Prepared by — EnvironmSafe', inv_sign_received:'Received by client',
+    inv_thanks:'Thank you for working with EnvironmSafe.',
+    inv_terms:'Terms: amounts are in US Dollars. Please quote the invoice number with your payment.',
+    inv_filter_all:'All', inv_filter_unpaid:'Unpaid', inv_filter_paid:'Paid',
+    inv_sum_invoiced:'Total invoiced', inv_sum_paid:'Collected', inv_sum_outstanding:'Outstanding',
+    inv_overdue_tag:'Payment overdue',
+    inv_mark_status:'Change status', inv_record_payment:'Record payment',
+    inv_payment_prompt:'Amount paid (USD):',
+    inv_src_fault:'Fault', inv_src_service:'Service', inv_src_manual:'Added manually',
+    inv_line_from_fault:'Corrective repair service', inv_line_from_service:'Scheduled maintenance service',
+    inv_stock_hint:'You can add any item even if it was not used on a repair — for example parts supplied to stock.',
+
+    pl_title:'Goods price list', pl_hint:'Items and their prices. You can always add an item outside this list when invoicing.',
+    pl_none:'No items yet.',
+    pl_name_ar:'Item name (Arabic)', pl_name_en:'Item name (English)',
+    pl_unit:'Unit', pl_price:'Price (USD)', pl_add:'Add item',
+    pl_need_name:'⚠️ Enter the item name', pl_added:'✅ Item added',
+    pl_edit:'✎ Edit', pl_activate:'Activate', pl_deactivate:'Deactivate', pl_delete:'Delete',
+    pl_del_confirm:'Delete this item from the price list?', pl_inactive:'Inactive',
+    pl_price_prompt:'New price in USD:', pl_name_prompt:'Item name:',
+    pl_unit_each:'each',
+
+    bill_title:'Billing settings', bill_hint:'Default service fee charged for each fault or service, and the currency.',
+    bill_service_rate:'Service fee per job', bill_currency:'Currency', bill_save:'Save settings',
+    bill_saved:'✅ Billing settings saved',
+
+    rep_invoices:'Invoices', rep_invoices_title:'Invoices report',
     rep_photos_title:'Attached Photos',
     labels_title:'Customize labels & tabs', labels_hint:'Rename any text shown in the app (Arabic/English). Leave a field blank to keep the default text.',
     labels_search_ph:'Search text...', labels_save:'💾 Save all changes', labels_saved:'✅ Changes saved',
     labels_reset:'Reset all to default', labels_reset_confirm:'Reset all labels to their default text?', labels_reset_done:'✅ Reset done',
     labels_ar:'Arabic', labels_en:'English',
-    cat_tabs:'Tabs', cat_tabheaders:'Tab headers', cat_faults:'Faults tab',
+    cat_tabs:'Tabs', cat_tabheaders:'Tab headers', cat_faults:'Faults tab', cat_billing:'Billing & prices',
     cat_maint:'Maintenance tab', cat_reports:'Reports', cat_readings:'Readings & History tab',
     cat_warnerr:'Warnings & errors', cat_general:'General',
     customfields_title:'Custom fields', customfields_hint:'Add new fields to any form in the app.',
@@ -762,6 +949,17 @@ let STATE = {
   labelOverrides: {},
   customFields: [],
   labelSearch: '',
+  pricelist: [],
+  invoices: [],
+  billing: {},              // settings/billing doc: { serviceRate, currency }
+  newFaultLines: [],        // billable goods lines being typed into the new-fault form
+  editFaultLines: null,     // ...and into the fault edit form
+  newFaultFee: null,        // typed service fee (null = fall back to the configured rate)
+  editFaultFee: null,
+  invFilter: 'all',
+  invEditingId: null,
+  invDraft: null,           // the invoice currently being built/edited (see blankInvoiceDraft)
+  invShowInvoiced: false,
   maintGenId: null,
   lang: 'ar',
   activeTab: 'new',
@@ -902,6 +1100,8 @@ async function init(){
   if(unsubSvc) unsubSvc();
   if(unsubSettings) unsubSettings();
   if(unsubCustomFields) unsubCustomFields();
+  if(unsubPricelist) unsubPricelist();
+  if(unsubInvoices) unsubInvoices();
 
   let generatorsLoaded = false, readingsLoaded = false;
   function maybeFirstRender(){
@@ -964,9 +1164,25 @@ async function init(){
   unsubSettings = db.collection(SETTINGS_COLLECTION).onSnapshot(snap=>{
     const labelsDoc = snap.docs.find(d=>d.id==='labels');
     STATE.labelOverrides = labelsDoc ? (labelsDoc.data() || {}) : {};
+    const billingDoc = snap.docs.find(d=>d.id===BILLING_DOC);
+    STATE.billing = billingDoc ? (billingDoc.data() || {}) : {};
     if(STATE.everRendered){ applyLangChrome(); render(); }
   }, err=>{
     console.warn('settings listener error', err);
+  });
+
+  unsubPricelist = db.collection(PRICELIST_COLLECTION).onSnapshot(snap=>{
+    STATE.pricelist = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered && (STATE.activeTab === 'invoices' || STATE.activeTab === 'corrective' || STATE.activeTab === 'generators')) render();
+  }, err=>{
+    console.warn('pricelist listener error', err);
+  });
+
+  unsubInvoices = db.collection(INVOICES_COLLECTION).onSnapshot(snap=>{
+    STATE.invoices = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    if(STATE.everRendered && (STATE.activeTab === 'invoices' || STATE.activeTab === 'reports' || STATE.activeTab === 'dashboard')) render();
+  }, err=>{
+    console.warn('invoices listener error', err);
   });
 
   unsubCustomFields = db.collection(CUSTOMFIELDS_COLLECTION).onSnapshot(snap=>{
@@ -993,6 +1209,7 @@ const TAB_TITLE_KEYS = {
   reports: ['title_reports','sub_reports'],
   maintenance: ['title_maint','sub_maint'],
   corrective: ['title_corr','sub_corr'],
+  invoices: ['title_invoices','sub_invoices'],
   dashboard: ['title_dashboard','sub_dashboard'],
   generators: ['title_setup','sub_setup'],
 };
@@ -1012,6 +1229,7 @@ function render(){
   else if(STATE.activeTab==='reports') app.innerHTML = renderReports();
   else if(STATE.activeTab==='maintenance') app.innerHTML = renderMaintenance();
   else if(STATE.activeTab==='corrective') app.innerHTML = renderCorrective();
+  else if(STATE.activeTab==='invoices') app.innerHTML = renderInvoices();
   else if(STATE.activeTab==='dashboard') app.innerHTML = renderDashboard();
   else if(STATE.activeTab==='generators') app.innerHTML = renderGenerators();
 
@@ -1020,6 +1238,7 @@ function render(){
   if(STATE.activeTab==='reports') bindReports();
   if(STATE.activeTab==='maintenance') bindMaintenance();
   if(STATE.activeTab==='corrective') bindCorrective();
+  if(STATE.activeTab==='invoices') bindInvoices();
   if(STATE.activeTab==='dashboard'){ bindDashboard(); setTimeout(drawDashCharts, 30); }
   if(STATE.activeTab==='generators') bindGenerators();
 }
@@ -1603,6 +1822,54 @@ function renderMaintReport(){
   </div>`;
 }
 
+function invReportRows(){
+  const from = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportFrom;
+  const to   = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportTo;
+  return (STATE.invoices||[])
+    .filter(i => { const d = i.date||''; return d >= from && d <= to; })
+    .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+}
+
+function renderInvReport(){
+  const rows = invReportRows();
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  if(!rows.length){
+    return `<div class="card"><div class="empty"><div class="em-ic">\u{1F9FE}</div>${t('inv_none')}</div></div>`;
+  }
+  const body = rows.map(inv=>{
+    const tt = invoiceTotals(inv);
+    const g = inv.genId ? genById(inv.genId) : null;
+    return `<tr>
+      <td>${escHtml(inv.invoiceNo||'')}</td>
+      <td>${inv.date? new Date(inv.date+'T00:00:00').toLocaleDateString(loc):'\u2014'}</td>
+      <td>${escHtml(inv.client||'')}</td>
+      <td>${g?escHtml(g.name):t('inv_all_gens')}</td>
+      <td>${invStatusLabel(inv.status)}</td>
+      <td>${moneyNum(tt.total)}</td>
+      <td>${moneyNum(tt.paid)}</td>
+      <td class="${tt.balance>0?'rp-bad':''}">${moneyNum(tt.balance)}</td>
+    </tr>`;
+  }).join('');
+  const tot = rows.reduce((s,i)=>{ const tt=invoiceTotals(i); if(i.status!=='cancelled'){ s.total+=tt.total; s.paid+=tt.paid; } return s; }, {total:0,paid:0});
+  return `
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:6px;">
+      <h3 style="margin:0;">${t('rep_invoices_title')}</h3>
+      <span style="font-size:12px;color:var(--muted);">${rows.length} \u00b7 ${t('inv_sum_outstanding')}: ${moneyNum(round2(tot.total-tot.paid))}</span>
+    </div>
+    <div class="rp-tablewrap">
+      <table class="rp-table">
+        <thead><tr><th>${t('inv_no')}</th><th>${t('inv_date')}</th><th>${t('inv_client')}</th><th>${t('inv_gen')}</th><th>${t('inv_status')}</th><th>${t('inv_total')}</th><th>${t('inv_paid_amount')}</th><th>${t('inv_balance')}</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
+      <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+  </div>`;
+}
+
 function renderCorrReport(){
   const g = genById(STATE.reportGenId);
   const rows = corrReportRows(STATE.reportGenId);
@@ -1712,6 +1979,7 @@ function renderReports(){
     else if(STATE.reportType==='svclog')   resultsHtml = renderSvcLogReport();
     else if(STATE.reportType==='corr')     resultsHtml = renderCorrReport();
     else if(STATE.reportType==='fleet')    resultsHtml = renderFleetReport();
+    else if(STATE.reportType==='invoices') resultsHtml = renderInvReport();
   }
 
   const typeChips = [
@@ -1720,10 +1988,11 @@ function renderReports(){
     ['svclog','rep_t_svclog'],
     ['corr','rep_t_corr'],
     ['fleet','rep_t_fleet'],
+    ['invoices','rep_invoices'],
   ].map(([v,k])=>`<div class="genchip ${STATE.reportType===v?'active':''}" data-rptype="${v}">${t(k)}</div>`).join('');
 
   // Fleet report covers all generators; others are per-generator
-  const needsGen = STATE.reportType!=='fleet';
+  const needsGen = (STATE.reportType!=='fleet' && STATE.reportType!=='invoices');
   // Maintenance status is "as of now", so no period needed
   const needsPeriod = STATE.reportType!=='maint';
 
@@ -1974,7 +2243,8 @@ function buildReportTable(){
     const hasCF = customFieldsFor('corrective').length > 0;
     const headers = [t('corr_fault_id'), t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
-               t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
+               t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by'),
+               t('corr_billable_total')+' ('+billingCurrency()+')', t('inv_no')])
       .concat(hasCF?[t('customfields_title')]:[]);
     const body = rows.map(c=>{
       const gg = genById(c.genId);
@@ -1983,7 +2253,8 @@ function buildReportTable(){
         .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
                  (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
                  c.shortDescription||'', c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
-                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||''])
+                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||'',
+                 moneyNum(faultBillableTotal(c)), (invoiceForSource('fault', c.id)||{}).invoiceNo || ''])
         .concat(hasCF?[customFieldsSummary('corrective', c.customFields)]:[]);
     });
     const sevIdx = all ? 4 : 3;
@@ -1995,6 +2266,31 @@ function buildReportTable(){
       subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
       period: reportPeriodLabel(), landscape: true,
       summary: `${bi?'عدد السجلات':'Records'}: ${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${dt}`,
+      empty: rows.length===0 };
+  }
+
+  if(type==='invoices'){
+    const rows = invReportRows();
+    const cur = billingCurrency();
+    const headers = [t('inv_no'), t('inv_date'), t('inv_client'), t('inv_gen'), t('inv_due_date'), t('inv_status'),
+                     t('inv_subtotal')+' ('+cur+')', t('inv_discount')+' ('+cur+')', t('inv_total')+' ('+cur+')',
+                     t('inv_paid_amount')+' ('+cur+')', t('inv_balance')+' ('+cur+')', t('inv_ref')];
+    const body = rows.map(inv=>{
+      const tt = invoiceTotals(inv);
+      const gg = inv.genId ? genById(inv.genId) : null;
+      return [inv.invoiceNo||'', inv.date ? new Date(inv.date+'T00:00:00').toLocaleDateString(loc) : '',
+              inv.client||'', gg?gg.name:t('inv_all_gens'), inv.dueDate||'', invStatusLabel(inv.status),
+              moneyNum(tt.subtotal), moneyNum(tt.discount), moneyNum(tt.total),
+              moneyNum(tt.paid), moneyNum(tt.balance), inv.ref||''];
+    });
+    const bad = rows.map(inv=> headers.map((h,i)=> i===10 && invoiceTotals(inv).balance > 0));
+    let totT = 0, totP = 0;
+    rows.forEach(inv=>{ if(inv.status!=='cancelled'){ const tt=invoiceTotals(inv); totT+=tt.total; totP+=tt.paid; } });
+    return { type, headers, body, bad,
+      title: bi ? 'تقرير الفواتير · Invoices Report' : 'Invoices Report',
+      subject: bi?'كل العملاء':'All clients', client: '',
+      period: reportPeriodLabel(), landscape: true,
+      summary: `${t('inv_sum_invoiced')}: ${moneyNum(totT)} ${cur} · ${t('inv_sum_paid')}: ${moneyNum(totP)} ${cur} · ${t('inv_sum_outstanding')}: ${moneyNum(round2(totT-totP))} ${cur}`,
       empty: rows.length===0 };
   }
 
@@ -2040,13 +2336,18 @@ function exportFullBackup(){
                x.by||'', x.backfilled?'yes':'']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(svc), 'ServiceHistory');
 
-  const corr = [['generator','date','type','severity','status','hoursAtEvent','description','actionTaken','partsUsed','downtimeHrs','by','closedDate']].concat(
+  const corr = [['generator','date','type','severity','status','hoursAtEvent','description','actionTaken','partsUsed','downtimeHrs','by','closedDate','serviceFee','partsBilled','billableTotal','invoiceNo']].concat(
     STATE.corrective.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')))
-      .map(c=>[nameOf(c.genId), c.date||'', c.type||'', c.severity||'', c.status||'',
+      .map(c=>{
+        const inv = invoiceForSource('fault', c.id);
+        return [nameOf(c.genId), c.date||'', c.type||'', c.severity||'', c.status||'',
                (c.hoursAtEvent===undefined||c.hoursAtEvent===null)?'':c.hoursAtEvent,
                c.description||'', c.actionTaken||'', c.partsUsed||'',
                (c.downtimeHrs===undefined||c.downtimeHrs===null)?'':c.downtimeHrs,
-               c.by||'', c.closedDate||'']));
+               c.by||'', c.closedDate||'',
+               faultServiceFee(c), linesSubtotal(faultPartsLines(c)), faultBillableTotal(c),
+               inv ? (inv.invoiceNo||'') : ''];
+      }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(corr), 'Faults');
 
   // Current maintenance baselines (what each schedule is counting from)
@@ -2063,6 +2364,26 @@ function exportFullBackup(){
     });
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(base), 'MaintBaselines');
+
+  const price = [['nameAr','nameEn','unit','unitPrice','active']].concat(
+    STATE.pricelist.slice().sort((a,b)=>priceItemLabel(a).localeCompare(priceItemLabel(b)))
+      .map(i=>[i.nameAr||'', i.nameEn||'', i.unit||'', round2(i.unitPrice), i.active===false?'no':'yes']));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(price), 'PriceList');
+
+  const invs = [['invoiceNo','date','client','generator','dueDate','status','currency','subtotal','discount','total','paid','balance','ref','notes']];
+  const invLines = [['invoiceNo','kind','sourceType','ref','description','qty','unitPrice','total']];
+  STATE.invoices.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||''))).forEach(inv=>{
+    const tt = invoiceTotals(inv);
+    invs.push([inv.invoiceNo||'', inv.date||'', inv.client||'', inv.genId?nameOf(inv.genId):'', inv.dueDate||'',
+               inv.status||'', inv.currency||billingCurrency(), tt.subtotal, tt.discount, tt.total, tt.paid, tt.balance,
+               inv.ref||'', inv.notes||'']);
+    (inv.lines||[]).forEach(l=>{
+      invLines.push([inv.invoiceNo||'', l.kind||'', l.sourceType||'', l.ref||'', l.desc||'',
+                     parseFloat(l.qty)||0, round2(l.unitPrice), lineTotal(l)]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invs), 'Invoices');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invLines), 'InvoiceLines');
 
   const stamp = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `EnvironmSafe_FULL_BACKUP_${stamp}.xlsx`);
@@ -2205,6 +2526,7 @@ function faultReportBody(c){
     ${block(t('corr_causes'), c.causesOfFault)}
     ${block(t('corr_action'), c.actionTaken)}
     ${block(t('corr_parts'), c.partsUsed)}
+    ${faultBillingReportBlock(c)}
     ${block(t('corr_recommend'), c.recommendations)}
     <div class="signrow">
       <div class="signbox">
@@ -2227,6 +2549,27 @@ function faultReportBody(c){
     </div>` : ''}`;
 }
 
+// Costed breakdown appended to the official fault report (skipped when nothing is chargeable).
+function faultBillingReportBlock(c){
+  const parts = faultPartsLines(c);
+  const fee = faultServiceFee(c);
+  if(!parts.length && !fee) return '';
+  const cur = billingCurrency();
+  const rows = [`<tr><td>${t('corr_service_fee')}</td><td class="num">1</td><td class="num">${moneyNum(fee)}</td><td class="num">${moneyNum(fee)}</td></tr>`]
+    .concat(parts.map(p=>`<tr><td>${escHtml(p.name||p.desc||'')}</td><td class="num">${parseFloat(p.qty)||0}</td><td class="num">${moneyNum(p.unitPrice)}</td><td class="num">${moneyNum(lineTotal(p))}</td></tr>`))
+    .join('');
+  return `<div class="blk">
+    <div class="bl">${t('corr_billing')} (${cur})</div>
+    <div class="bv" style="padding:0;">
+      <table class="itbl" style="margin:0;">
+        <thead><tr><th>${t('inv_line_desc')}</th><th class="num">${t('inv_line_qty')}</th><th class="num">${t('inv_line_price')}</th><th class="num">${t('inv_line_total')}</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="3" style="text-align:end;font-weight:800;">${t('corr_billable_total')}</td><td class="num" style="font-weight:800;">${moneyNum(faultBillableTotal(c))}</td></tr></tfoot>
+      </table>
+    </div>
+  </div>`;
+}
+
 const FAULT_REPORT_CSS = `
     *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1E2430;margin:0;}
     .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #C49A2A;padding-bottom:10px;margin-bottom:14px;}
@@ -2247,6 +2590,12 @@ const FAULT_REPORT_CSS = `
     .photosec{margin-top:22px;page-break-inside:avoid;}
     .photogrid{display:flex;flex-wrap:wrap;gap:8px;border:1px solid #C9CED6;border-top:none;padding:8px;}
     .photogrid img{width:31%;height:auto;object-fit:cover;border:1px solid #C9CED6;border-radius:4px;}
+    .itbl{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:10px;}
+    .itbl th{background:#1B2A4A;color:#fff;padding:6px 5px;font-weight:700;border:0.5px solid #1B2A4A;}
+    .itbl td{padding:5px;border:0.5px solid #C9CED6;vertical-align:top;}
+    .itbl tr:nth-child(even) td{background:#F7F8FA;}
+    .itbl .num{text-align:end;white-space:nowrap;}
+    .itbl .lref{color:#6B7280;font-size:10px;}
 `;
 
 function printFaultReport(id){
@@ -2786,6 +3135,70 @@ function renderPhotoThumbs(photos, prefix, readOnly){
     </div>`).join('') + `</div>`;
 }
 
+// The billable block shown inside both fault forms: service fee + goods lines + running total.
+// `prefix` is 'c' (new fault) or 'ce' (edit); `lines` is the matching STATE buffer.
+function renderFaultBillingBlock(c, prefix, lines){
+  const buffered = c ? STATE.editFaultFee : STATE.newFaultFee;
+  const fee = (buffered===null || buffered===undefined)
+    ? (c ? faultServiceFee(c) : serviceRate())
+    : buffered;
+  const total = round2((parseFloat(fee)||0) + linesSubtotal(lines));
+  return `
+    <hr class="section-sep">
+    <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('corr_billing')}</h4>
+    <div class="hint">${t('corr_billing_hint')}</div>
+    <label>${t('corr_service_fee')} (${billingCurrency()})</label>
+    <input type="number" step="0.01" min="0" id="${prefix}-fee" value="${round2(fee)}">
+    ${renderLineEditor(lines, prefix+'line', { emptyText: '—' })}
+    ${renderAddItemForm(prefix+'add')}
+    <div class="totbox">
+      <div class="totrow grand"><span>${t('corr_billable_total')}</span><span class="money">${money(total)}</span></div>
+    </div>
+    <hr class="section-sep">`;
+}
+
+// Read-only billing summary shown on a saved fault card, plus whether it has been invoiced.
+function renderFaultBillingSummary(c){
+  const parts = faultPartsLines(c);
+  const fee = faultServiceFee(c);
+  const inv = invoiceForSource('fault', c.id);
+  const tag = inv
+    ? `<span style="font-size:11px;color:var(--ok);font-weight:700;"> · ${t('inv_already')}: ${escHtml(inv.invoiceNo||'')}</span>`
+    : '';
+  return `
+    <div class="totbox">
+      <div class="totrow"><span>${t('corr_service_fee')}</span><span class="money">${money(fee)}</span></div>
+      ${parts.length ? renderLineEditor(parts, 'ro', { readOnly:true }) : ''}
+      <div class="totrow grand"><span>${t('corr_billable_total')}${tag}</span><span class="money">${money(faultBillableTotal(c))}</span></div>
+    </div>`;
+}
+
+// Wires the add-item strip + line removal for one fault form.
+function bindFaultBillingBlock(prefix, getLines, setLines){
+  bindAddItemForm(prefix+'add', line=>{
+    setLines(getLines().concat([line]));
+    rerenderPreservingCorrForm();
+    ['-pick','-name','-qty','-price'].forEach(sfx=>{
+      const e = document.getElementById(prefix+'add'+sfx);
+      if(e) e.value = sfx==='-qty' ? '1' : '';
+    });
+  });
+  document.querySelectorAll(`[data-linerm^="${prefix}line:"]`).forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.linerm.split(':')[1], 10);
+      setLines(getLines().filter((_,i)=>i!==idx));
+      rerenderPreservingCorrForm();
+    });
+  });
+  const feeEl = document.getElementById(prefix+'-fee');
+  if(feeEl) feeEl.addEventListener('input', ()=>{
+    const raw = String(feeEl.value||'').trim();
+    const v = raw==='' ? null : round2(parseFloat(raw)||0);
+    if(prefix==='ce') STATE.editFaultFee = v; else STATE.newFaultFee = v;
+    rerenderPreservingCorrForm();
+  });
+}
+
 function renderCorrEditForm(c){
   const genOptions = STATE.generators.map(g=>`<option value="${g.id}"${g.id===c.genId?' selected':''}>${g.name}</option>`).join('');
   const typeOptions = CORR_TYPES.map(v=>`<option value="${v}"${v===(c.type||'other')?' selected':''}>${corrTypeLabel(v)}</option>`).join('');
@@ -2819,6 +3232,7 @@ function renderCorrEditForm(c){
     <textarea id="ce-action" rows="2" placeholder="—">${esc(c.actionTaken)}</textarea>
     <label>${t('corr_parts')}</label>
     <input type="text" id="ce-parts" value="${esc(c.partsUsed)}" placeholder="—">
+    ${renderFaultBillingBlock(c, 'ce', STATE.editFaultLines)}
     <label>${t('corr_by')}</label>
     <input type="text" id="ce-by" value="${esc(c.by)}" placeholder="—">
     <label>${t('corr_recommend')}</label>
@@ -2891,6 +3305,7 @@ function renderCorrective(){
       ${c.recommendations?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_recommend')}:</b> ${c.recommendations}</div>`:''}
       ${renderPhotoThumbs(c.photos, 'view', true)}
       ${renderCustomFieldValues('corrective', c.customFields)}
+      ${renderFaultBillingSummary(c)}
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
         <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
@@ -2931,6 +3346,7 @@ function renderCorrective(){
     <textarea id="c-action" rows="2" placeholder="—"></textarea>
     <label>${t('corr_parts')}</label>
     <input type="text" id="c-parts" placeholder="—">
+    ${renderFaultBillingBlock(null, 'c', STATE.newFaultLines)}
     <label>${t('corr_by')}</label>
     <input type="text" id="c-by" placeholder="—">
     <label>${t('corr_recommend')}</label>
@@ -2954,6 +3370,11 @@ function bindCorrective(){
   document.querySelectorAll('[data-corrfilter]').forEach(ch=>{
     ch.addEventListener('click', ()=>{ STATE.corrFilter = ch.dataset.corrfilter; render(); });
   });
+
+  bindFaultBillingBlock('c', ()=>STATE.newFaultLines, v=>{ STATE.newFaultLines = v; });
+  if(STATE.corrEditingId){
+    bindFaultBillingBlock('ce', ()=>STATE.editFaultLines||[], v=>{ STATE.editFaultLines = v; });
+  }
 
   const backfillBtn = document.getElementById('corr-backfill-btn');
   if(backfillBtn) backfillBtn.addEventListener('click', async ()=>{
@@ -3011,6 +3432,11 @@ function bindCorrective(){
       downtimeHrs: num('c-downtime'),
       by,
       recommendations: val('c-recommend'),
+      serviceFee: (val('c-fee')==='' ? serviceRate() : round2(parseFloat(val('c-fee'))||0)),
+      partsLines: STATE.newFaultLines.map(l=>({
+        itemId: l.itemId||'', name: l.name||l.desc||'', desc: l.desc||l.name||'',
+        qty: parseFloat(l.qty)||0, unitPrice: round2(l.unitPrice), total: lineTotal(l)
+      })),
       photos: STATE.newFaultPhotos.slice(),
       customFields: collectCustomFieldValues('corrective', 'c'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3021,6 +3447,8 @@ function bindCorrective(){
       showToast(t('corr_saved'));
       ['c-shortdesc','c-desc','c-causes','c-action','c-parts','c-hours','c-downtime','c-recommend'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
       STATE.newFaultPhotos = [];
+      STATE.newFaultLines = [];
+      STATE.newFaultFee = null;
       render();
     }catch(e){
       console.warn('corrective save failed', e);
@@ -3071,6 +3499,8 @@ function bindCorrective(){
       const c = STATE.corrective.find(x=>x.id===btn.dataset.corredit);
       STATE.corrEditingId = btn.dataset.corredit;
       STATE.editFaultPhotos = (c && c.photos) ? c.photos.slice() : [];
+      STATE.editFaultLines = faultPartsLines(c).map(l=>Object.assign({}, l));
+      STATE.editFaultFee = faultServiceFee(c);
       render();
     });
   });
@@ -3079,6 +3509,8 @@ function bindCorrective(){
     btn.addEventListener('click', ()=>{
       STATE.corrEditingId = null;
       STATE.editFaultPhotos = null;
+      STATE.editFaultLines = null;
+      STATE.editFaultFee = null;
       render();
     });
   });
@@ -3110,6 +3542,11 @@ function bindCorrective(){
         downtimeHrs: num('ce-downtime'),
         by,
         recommendations: val('ce-recommend'),
+        serviceFee: (val('ce-fee')==='' ? serviceRate() : round2(parseFloat(val('ce-fee'))||0)),
+        partsLines: (STATE.editFaultLines||[]).map(l=>({
+          itemId: l.itemId||'', name: l.name||l.desc||'', desc: l.desc||l.name||'',
+          qty: parseFloat(l.qty)||0, unitPrice: round2(l.unitPrice), total: lineTotal(l)
+        })),
         photos: (STATE.editFaultPhotos || []).slice(),
         customFields: collectCustomFieldValues('corrective', 'ce')
       };
@@ -3126,12 +3563,924 @@ function bindCorrective(){
         showToast(t('corr_updated'));
         STATE.corrEditingId = null;
         STATE.editFaultPhotos = null;
+        STATE.editFaultLines = null;
+        STATE.editFaultFee = null;
         render();
       }catch(e){
         console.warn('corrective update failed', e);
         showToast(t('corr_fail'));
       }finally{ btn.disabled = false; }
     });
+  });
+}
+
+/* ================= BILLING CORE =================
+   Three pieces work together:
+     1. pricelist   — the goods catalogue (Setup tab). Prices can always be overridden,
+                      and an item that is not on the list can be typed straight in.
+     2. billable    — every fault carries a service fee + its own goods lines;
+                      every service VISIT (one generator on one date, however many
+                      intervals were ticked off) carries one service fee.
+     3. invoices    — pick the un-invoiced work, add any extra goods (including stock
+                      supply that was never used on a repair), then follow up payment.
+   "Already invoiced" is derived from the invoice lines themselves (sourceType+sourceId),
+   so nothing has to be written back onto a fault and the two can never drift apart. */
+
+function billingCurrency(){ return STATE.billing.currency || DEFAULT_CURRENCY; }
+
+function serviceRate(){
+  const r = parseFloat(STATE.billing.serviceRate);
+  return (isNaN(r) || r < 0) ? DEFAULT_SERVICE_RATE : r;
+}
+
+function round2(n){
+  const v = Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+  return Object.is(v, -0) ? 0 : v;
+}
+function moneyNum(n){ return round2(n).toFixed(2); }
+function money(n){ return moneyNum(n) + ' ' + billingCurrency(); }
+
+/* ---- price list ---- */
+function priceItemLabel(item){
+  if(!item) return '';
+  return STATE.lang==='ar' ? (item.nameAr || item.nameEn || '') : (item.nameEn || item.nameAr || '');
+}
+function priceItemById(id){ return STATE.pricelist.find(i=>i.id===id) || null; }
+function activePriceItems(){
+  return STATE.pricelist.filter(i=>i.active!==false)
+    .slice().sort((a,b)=>priceItemLabel(a).localeCompare(priceItemLabel(b)));
+}
+
+/* ---- invoice line helpers ---- */
+function lineTotal(l){
+  const q = parseFloat(l && l.qty); const p = parseFloat(l && l.unitPrice);
+  return round2((isNaN(q)?0:q) * (isNaN(p)?0:p));
+}
+function linesSubtotal(lines){
+  return round2((lines||[]).reduce((s,l)=>s + lineTotal(l), 0));
+}
+
+/* ---- what a fault is worth ---- */
+function faultServiceFee(c){
+  if(!c) return 0;
+  if(c.serviceFee===undefined || c.serviceFee===null || c.serviceFee==='') return serviceRate();
+  const v = parseFloat(c.serviceFee);
+  return isNaN(v) ? serviceRate() : v;
+}
+function faultPartsLines(c){
+  return (c && Array.isArray(c.partsLines)) ? c.partsLines : [];
+}
+function faultBillableTotal(c){
+  return round2(faultServiceFee(c) + linesSubtotal(faultPartsLines(c)));
+}
+
+/* ---- what a service visit is worth ----
+   Nesting means one visit can write several servicelog rows (500 h also clears 250 and 125).
+   That is ONE visit, so it is billed once: rows are grouped by generator + date. */
+function serviceVisits(){
+  const byKey = {};
+  (STATE.svclog||[]).forEach(s=>{
+    if(!s.genId || !s.date) return;
+    const key = s.genId + '|' + s.date;
+    if(!byKey[key]) byKey[key] = { key, genId: s.genId, date: s.date, by: s.by || '', labels: [], rows: [] };
+    if(s.intervalLabel && byKey[key].labels.indexOf(s.intervalLabel) === -1) byKey[key].labels.push(s.intervalLabel);
+    if(!byKey[key].by && s.by) byKey[key].by = s.by;
+    byKey[key].rows.push(s);
+  });
+  return Object.keys(byKey).map(k=>byKey[k]).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+
+/* ---- has this job been billed already? (derived from the invoices themselves) ---- */
+function invoicedSourceKeys(exceptInvoiceId){
+  const set = {};
+  (STATE.invoices||[]).forEach(inv=>{
+    if(inv.status==='cancelled') return;
+    if(exceptInvoiceId && inv.id===exceptInvoiceId) return;
+    (inv.lines||[]).forEach(l=>{
+      if(l && l.sourceType && l.sourceType!=='manual' && l.sourceId) set[l.sourceType+':'+l.sourceId] = inv;
+    });
+  });
+  return set;
+}
+function invoiceForSource(sourceType, sourceId, exceptInvoiceId){
+  return invoicedSourceKeys(exceptInvoiceId)[sourceType+':'+sourceId] || null;
+}
+
+/* ---- the pickable work list for one client ---- */
+function billableWorkItems(client, exceptInvoiceId){
+  const done = invoicedSourceKeys(exceptInvoiceId);
+  const items = [];
+
+  (STATE.corrective||[]).forEach(c=>{
+    const g = genById(c.genId);
+    if(client && (!g || g.client !== client)) return;
+    const fee = faultServiceFee(c);
+    const parts = faultPartsLines(c);
+    items.push({
+      sourceType:'fault', sourceId:c.id, ref: c.faultId || '',
+      date: c.date || '', genId: c.genId, genName: g ? g.name : '—',
+      title: c.shortDescription || c.description || '',
+      by: c.by || '', fee, parts,
+      amount: round2(fee + linesSubtotal(parts)),
+      invoicedBy: done['fault:'+c.id] || null
+    });
+  });
+
+  serviceVisits().forEach(v=>{
+    const g = genById(v.genId);
+    if(client && (!g || g.client !== client)) return;
+    const fee = serviceRate();
+    items.push({
+      sourceType:'service', sourceId: v.key, ref: '',
+      date: v.date, genId: v.genId, genName: g ? g.name : '—',
+      title: v.labels.join(' · '),
+      by: v.by, fee, parts: [],
+      amount: round2(fee),
+      invoicedBy: done['service:'+v.key] || null
+    });
+  });
+
+  return items.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+
+/* ---- turn a picked job into invoice lines ---- */
+function linesFromWorkItem(w){
+  const lines = [];
+  const what = w.sourceType==='fault' ? t('inv_line_from_fault') : t('inv_line_from_service');
+  const detail = [w.genName, w.ref || w.title].filter(Boolean).join(' — ');
+  lines.push({
+    kind:'service', sourceType:w.sourceType, sourceId:w.sourceId, ref:w.ref || '',
+    desc: what + (detail ? ' — ' + detail : ''),
+    qty: 1, unitPrice: round2(w.fee), total: round2(w.fee)
+  });
+  (w.parts||[]).forEach(p=>{
+    lines.push({
+      kind:'good', sourceType:w.sourceType, sourceId:w.sourceId, ref:w.ref || '',
+      desc: p.name || '', qty: (parseFloat(p.qty)||0), unitPrice: round2(p.unitPrice),
+      total: lineTotal(p)
+    });
+  });
+  return lines;
+}
+
+/* ---- invoice numbering & totals ---- */
+function nextInvoiceSeq(){
+  const nums = (STATE.invoices||[]).map(i=>i.invoiceSeq).filter(n=>typeof n==='number' && !isNaN(n));
+  return nums.length ? Math.max.apply(null, nums) + 1 : INVOICE_ID_START;
+}
+
+function invoiceTotals(inv){
+  const subtotal = linesSubtotal(inv && inv.lines);
+  const discRaw = parseFloat(inv && inv.discount);
+  const discount = isNaN(discRaw) ? 0 : round2(Math.max(0, discRaw));
+  const total = round2(Math.max(0, subtotal - discount));
+  const paidRaw = parseFloat(inv && inv.paidAmount);
+  const paid = isNaN(paidRaw) ? 0 : round2(Math.max(0, paidRaw));
+  return { subtotal, discount, total, paid, balance: round2(total - paid) };
+}
+
+function statusForPayment(inv, paid){
+  const { total } = invoiceTotals(Object.assign({}, inv, { paidAmount: paid }));
+  if(paid <= 0) return inv.status==='draft' ? 'draft' : 'sent';
+  return paid >= total ? 'paid' : 'partly_paid';
+}
+
+function invoiceIsOverdue(inv){
+  if(!inv || !inv.dueDate) return false;
+  if(inv.status==='paid' || inv.status==='cancelled') return false;
+  if(invoiceTotals(inv).balance <= 0) return false;
+  return inv.dueDate < todayStr();
+}
+
+function invoiceSummary(){
+  let invoiced = 0, paid = 0;
+  (STATE.invoices||[]).forEach(inv=>{
+    if(inv.status==='cancelled') return;
+    const tt = invoiceTotals(inv);
+    invoiced += tt.total; paid += tt.paid;
+  });
+  invoiced = round2(invoiced); paid = round2(paid);
+  return { invoiced, paid, outstanding: round2(invoiced - paid) };
+}
+
+function invStatusLabel(v){ return t('inv_st_' + (v || 'draft')); }
+
+function clientList(){
+  const seen = [];
+  (STATE.generators||[]).forEach(g=>{ if(g.client && seen.indexOf(g.client)===-1) seen.push(g.client); });
+  (STATE.invoices||[]).forEach(i=>{ if(i.client && seen.indexOf(i.client)===-1) seen.push(i.client); });
+  return seen;
+}
+
+function invoicesSorted(){
+  return (STATE.invoices||[]).slice().sort((a,b)=>{
+    const d = String(b.date||'').localeCompare(String(a.date||''));
+    return d !== 0 ? d : (b.invoiceSeq||0) - (a.invoiceSeq||0);
+  });
+}
+
+/* ================= BILLING: draft handling ================= */
+function blankInvoiceDraft(){
+  const clients = clientList();
+  return {
+    id: null, client: clients[0] || '', genId: '', date: todayStr(), dueDate: '',
+    ref: '', notes: '', lines: [], discount: 0, status: 'draft', paidAmount: 0, paidDate: ''
+  };
+}
+
+function currentInvDraft(){
+  if(!STATE.invDraft) STATE.invDraft = blankInvoiceDraft();
+  return STATE.invDraft;
+}
+
+function draftHasSource(draft, sourceType, sourceId){
+  return (draft.lines||[]).some(l=>l.sourceType===sourceType && l.sourceId===sourceId);
+}
+
+function toggleWorkItemInDraft(w){
+  const d = currentInvDraft();
+  if(draftHasSource(d, w.sourceType, w.sourceId)){
+    d.lines = d.lines.filter(l=>!(l.sourceType===w.sourceType && l.sourceId===w.sourceId));
+  }else{
+    d.lines = d.lines.concat(linesFromWorkItem(w));
+  }
+}
+
+// Read every builder input back into the draft BEFORE re-rendering, otherwise ticking a
+// checkbox would wipe whatever the user had already typed (same trap as the Faults form).
+function syncInvDraftFromForm(){
+  const d = currentInvDraft();
+  const get = id => { const e = document.getElementById(id); return e ? String(e.value==null?'':e.value) : null; };
+  const setIf = (id, key, asNumber) => {
+    const v = get(id);
+    if(v===null) return;
+    d[key] = asNumber ? (v.trim()==='' ? 0 : (parseFloat(v)||0)) : v;
+  };
+  setIf('inv-client','client'); setIf('inv-gen','genId'); setIf('inv-date','date');
+  setIf('inv-duedate','dueDate'); setIf('inv-ref','ref'); setIf('inv-notes','notes');
+  setIf('inv-status','status'); setIf('inv-discount','discount', true);
+  setIf('inv-paid','paidAmount', true); setIf('inv-paiddate','paidDate');
+  return d;
+}
+
+/* ================= BILLABLE LINE EDITOR (shared by Faults + Invoices) ================= */
+// Renders an editable goods table. `prefix` namespaces the remove buttons.
+function renderLineEditor(lines, prefix, opts){
+  opts = opts || {};
+  if(!lines || !lines.length) return `<div class="line-empty">${opts.emptyText || '—'}</div>`;
+  const rows = lines.map((l,i)=>`
+    <tr class="${l.kind==='service'?'line-service':''}">
+      <td>${escHtml(l.desc||'')}${l.ref?`<span class="line-ref">${escHtml(l.ref)}</span>`:''}</td>
+      <td class="num">${(parseFloat(l.qty)||0)}</td>
+      <td class="num"><span class="money">${moneyNum(l.unitPrice)}</span></td>
+      <td class="num"><span class="money">${moneyNum(lineTotal(l))}</span></td>
+      ${opts.readOnly?'':`<td class="num"><button type="button" class="line-rm" data-linerm="${prefix}:${i}" aria-label="remove">✕</button></td>`}
+    </tr>`).join('');
+  return `<table class="linetable">
+    <thead><tr>
+      <th>${t('inv_line_desc')}</th><th class="num">${t('inv_line_qty')}</th>
+      <th class="num">${t('inv_line_price')}</th><th class="num">${t('inv_line_total')}</th>
+      ${opts.readOnly?'':'<th></th>'}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// The "add an item" strip: price-list dropdown OR a free-typed item, qty, price.
+function renderAddItemForm(prefix){
+  const opts = activePriceItems()
+    .map(i=>`<option value="${i.id}">${escHtml(priceItemLabel(i))} — ${moneyNum(i.unitPrice)}</option>`).join('');
+  return `
+    <label>${t('inv_item')}</label>
+    <select id="${prefix}-pick">
+      <option value="">${t('inv_custom_item')}</option>
+      ${opts}
+    </select>
+    <input type="text" id="${prefix}-name" placeholder="${t('inv_custom_item')}" style="margin-top:6px;">
+    <div class="grid2">
+      <div><label>${t('inv_qty')}</label><input type="number" step="0.01" min="0" id="${prefix}-qty" value="1"></div>
+      <div><label>${t('inv_unit_price')} (${billingCurrency()})</label><input type="number" step="0.01" min="0" id="${prefix}-price" placeholder="0.00"></div>
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" id="${prefix}-add" style="margin-top:8px;">${t('inv_add_line')}</button>`;
+}
+
+// Wires one add-item strip. onAdd(line) receives the built line; the caller re-renders.
+function bindAddItemForm(prefix, onAdd){
+  const pick = document.getElementById(prefix+'-pick');
+  const nameEl = document.getElementById(prefix+'-name');
+  const priceEl = document.getElementById(prefix+'-price');
+  if(pick) pick.addEventListener('change', ()=>{
+    const item = priceItemById(pick.value);
+    if(item){
+      if(nameEl){ nameEl.value = priceItemLabel(item); }
+      if(priceEl){ priceEl.value = round2(item.unitPrice); }
+    }else if(nameEl){ nameEl.value = ''; if(priceEl) priceEl.value = ''; }
+  });
+  const addBtn = document.getElementById(prefix+'-add');
+  if(addBtn) addBtn.addEventListener('click', ()=>{
+    const item = pick ? priceItemById(pick.value) : null;
+    const name = (nameEl && nameEl.value.trim()) || (item ? priceItemLabel(item) : '');
+    if(!name){ showToast(t('inv_need_item')); return; }
+    const qtyEl = document.getElementById(prefix+'-qty');
+    const qty = qtyEl && qtyEl.value.trim()!=='' ? (parseFloat(qtyEl.value)||0) : 1;
+    const priceRaw = priceEl ? priceEl.value.trim() : '';
+    if(priceRaw===''){ showToast(t('inv_need_price')); return; }
+    const unitPrice = round2(parseFloat(priceRaw)||0);
+    onAdd({
+      kind:'good', sourceType:'manual', sourceId:'', ref:'',
+      itemId: item ? item.id : '', desc: name, name,
+      qty, unitPrice, total: round2(qty*unitPrice)
+    });
+  });
+}
+
+/* ================= INVOICES TAB ================= */
+function renderInvoiceBuilder(){
+  const d = currentInvDraft();
+  const editing = !!d.id;
+  const clients = clientList();
+  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+
+  const clientOptions = clients.map(c=>`<option value="${escHtml(c)}"${c===d.client?' selected':''}>${escHtml(c)}</option>`).join('');
+  const gens = STATE.generators.filter(g=>!d.client || g.client===d.client);
+  const genOptions = `<option value="">${t('inv_all_gens')}</option>` +
+    gens.map(g=>`<option value="${g.id}"${g.id===d.genId?' selected':''}>${escHtml(g.name)}</option>`).join('');
+  const statusOptions = INVOICE_STATUS.map(s=>`<option value="${s}"${s===d.status?' selected':''}>${invStatusLabel(s)}</option>`).join('');
+
+  const work = billableWorkItems(d.client, d.id);
+  const visible = STATE.invShowInvoiced ? work : work.filter(w=>!w.invoicedBy || draftHasSource(d, w.sourceType, w.sourceId));
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+  const pickRows = visible.length ? visible.map(w=>{
+    const key = w.sourceType + ':' + w.sourceId;
+    const checked = draftHasSource(d, w.sourceType, w.sourceId);
+    const dstr = w.date ? new Date(w.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '—';
+    const tag = w.invoicedBy ? ` · <b>${t('inv_already')}: ${escHtml(w.invoicedBy.invoiceNo||'')}</b>` : '';
+    return `<label class="pickrow${w.invoicedBy?' is-invoiced':''}">
+      <input type="checkbox" data-invpick="${escHtml(key)}"${checked?' checked':''}>
+      <span class="pickrow-main">
+        <b>${w.ref?escHtml(w.ref)+' · ':''}${escHtml(w.genName)}</b>
+        <span class="pickrow-sub">${escHtml(w.title||t('inv_src_'+w.sourceType))} · ${dstr}${tag}</span>
+      </span>
+      <span class="pickrow-amt money">${moneyNum(w.amount)}</span>
+    </label>`;
+  }).join('') : `<div class="hint">${t('inv_pick_none')}</div>`;
+
+  const tt = invoiceTotals(d);
+
+  return `<div class="card">
+    <h3>${editing ? t('inv_edit_title') : t('inv_new')}</h3>
+    <div class="inv-no">${t('inv_no')}: ${editing ? escHtml(d.invoiceNo||'') : INVOICE_ID_PREFIX + nextInvoiceSeq()}</div>
+    <label class="req">${t('inv_client')}</label>
+    <select id="inv-client">${clientOptions || `<option value="">—</option>`}</select>
+    <label>${t('inv_gen')}</label>
+    <select id="inv-gen">${genOptions}</select>
+    <div class="grid2">
+      <div><label>${t('inv_date')}</label><input type="date" id="inv-date" value="${esc(d.date)}"></div>
+      <div><label>${t('inv_due_date')}</label><input type="date" id="inv-duedate" value="${esc(d.dueDate)}"></div>
+    </div>
+    <label>${t('inv_ref')}</label>
+    <input type="text" id="inv-ref" value="${esc(d.ref)}" placeholder="—">
+
+    <hr class="section-sep">
+    <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('inv_pick_work')}</h4>
+    <div class="hint">${t('inv_pick_hint')}</div>
+    <label class="pickrow" style="border-top:none;padding-top:0;">
+      <input type="checkbox" id="inv-showinvoiced"${STATE.invShowInvoiced?' checked':''}>
+      <span class="pickrow-main">${t('inv_show_invoiced')}</span>
+    </label>
+    ${pickRows}
+
+    <hr class="section-sep">
+    <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('inv_add_goods')}</h4>
+    <div class="hint">${t('inv_stock_hint')}</div>
+    ${renderAddItemForm('invadd')}
+
+    <hr class="section-sep">
+    <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('inv_lines')}</h4>
+    ${renderLineEditor(d.lines, 'inv', { emptyText: '—' })}
+
+    <div class="grid2">
+      <div><label>${t('inv_discount')} (${billingCurrency()})</label><input type="number" step="0.01" min="0" id="inv-discount" value="${esc(d.discount||0)}"></div>
+      <div><label>${t('inv_status')}</label><select id="inv-status">${statusOptions}</select></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('inv_paid_amount')} (${billingCurrency()})</label><input type="number" step="0.01" min="0" id="inv-paid" value="${esc(d.paidAmount||0)}"></div>
+      <div><label>${t('inv_paid_date')}</label><input type="date" id="inv-paiddate" value="${esc(d.paidDate)}"></div>
+    </div>
+    <label>${t('inv_notes')}</label>
+    <textarea id="inv-notes" rows="2" placeholder="—">${escHtml(d.notes||'')}</textarea>
+
+    <div class="totbox">
+      <div class="totrow"><span>${t('inv_subtotal')}</span><span class="money">${money(tt.subtotal)}</span></div>
+      ${tt.discount?`<div class="totrow"><span>${t('inv_discount')}</span><span class="money">− ${money(tt.discount)}</span></div>`:''}
+      <div class="totrow grand"><span>${t('inv_total')}</span><span class="money">${money(tt.total)}</span></div>
+      ${tt.paid?`<div class="totrow paidrow"><span>${t('inv_paid_amount')}</span><span class="money">${money(tt.paid)}</span></div>`:''}
+      ${tt.balance>0?`<div class="totrow due"><span>${t('inv_balance')}</span><span class="money">${money(tt.balance)}</span></div>`:''}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="inv-save">${editing ? t('inv_update') : t('inv_save')}</button>
+      ${editing?`<button class="btn btn-outline" id="inv-cancel">${t('inv_cancel')}</button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderInvoices(){
+  const sum = invoiceSummary();
+  const loc = STATE.lang==='ar' ? 'ar' : undefined;
+
+  const summaryCard = `<div class="card">
+    <div class="statgrid">
+      <div class="stat"><div class="v money">${moneyNum(sum.invoiced)}</div><div class="l">${t('inv_sum_invoiced')}</div></div>
+      <div class="stat"><div class="v money" style="color:var(--ok);">${moneyNum(sum.paid)}</div><div class="l">${t('inv_sum_paid')}</div></div>
+    </div>
+    <div class="stat" style="margin-top:10px;">
+      <div class="v money" style="color:${sum.outstanding>0?'var(--bad)':'var(--ok)'};">${moneyNum(sum.outstanding)}</div>
+      <div class="l">${t('inv_sum_outstanding')} (${billingCurrency()})</div>
+    </div>
+  </div>`;
+
+  const chips = `
+    <div class="genchip ${STATE.invFilter==='all'?'active':''}" data-invfilter="all">${t('inv_filter_all')}</div>
+    <div class="genchip ${STATE.invFilter==='unpaid'?'active':''}" data-invfilter="unpaid">${t('inv_filter_unpaid')}</div>
+    <div class="genchip ${STATE.invFilter==='paid'?'active':''}" data-invfilter="paid">${t('inv_filter_paid')}</div>`;
+
+  let list = invoicesSorted();
+  if(STATE.invFilter==='unpaid') list = list.filter(i=>i.status!=='cancelled' && invoiceTotals(i).balance > 0);
+  if(STATE.invFilter==='paid') list = list.filter(i=>i.status==='paid' || (i.status!=='cancelled' && invoiceTotals(i).balance <= 0));
+
+  const cards = list.length ? list.map(inv=>{
+    const tt = invoiceTotals(inv);
+    const g = inv.genId ? genById(inv.genId) : null;
+    const dstr = inv.date ? new Date(inv.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '—';
+    const nServices = (inv.lines||[]).filter(l=>l.kind==='service').length;
+    const nGoods = (inv.lines||[]).filter(l=>l.kind!=='service').length;
+    return `<div class="inv-card st-${inv.status||'draft'}">
+      <div class="rowbetween" style="align-items:flex-start;">
+        <div>
+          <div class="inv-no">${escHtml(inv.invoiceNo||'')}</div>
+          <div style="font-weight:800;font-size:13.5px;">${escHtml(inv.client||'—')}${g?` <span style="font-weight:600;color:var(--muted);font-size:12px;">· ${escHtml(g.name)}</span>`:''}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
+            ${dstr}${inv.dueDate?` · ${t('inv_due_date')}: ${escHtml(inv.dueDate)}`:''}
+            · ${nServices} ${t('inv_kind_service')} · ${nGoods} ${t('inv_kind_good')}
+          </div>
+          ${inv.ref?`<div style="font-size:11.5px;color:var(--muted);">${t('inv_ref')}: ${escHtml(inv.ref)}</div>`:''}
+        </div>
+        <div style="text-align:end;">
+          <span class="pill pill-${inv.status||'draft'}">${invStatusLabel(inv.status)}</span>
+          ${invoiceIsOverdue(inv)?`<div style="font-size:10.5px;color:var(--bad);font-weight:800;margin-top:4px;">${t('inv_overdue_tag')}</div>`:''}
+        </div>
+      </div>
+      <div class="totbox">
+        <div class="totrow"><span>${t('inv_total')}</span><span class="money">${money(tt.total)}</span></div>
+        ${tt.paid?`<div class="totrow paidrow"><span>${t('inv_paid_amount')}</span><span class="money">${money(tt.paid)}</span></div>`:''}
+        ${tt.balance>0?`<div class="totrow due"><span>${t('inv_balance')}</span><span class="money">${money(tt.balance)}</span></div>`:''}
+      </div>
+      ${inv.notes?`<div style="font-size:12px;margin-top:6px;color:var(--muted);white-space:pre-wrap;">${escHtml(inv.notes)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" data-invpay="${inv.id}">${t('inv_record_payment')}</button>
+        <button class="btn btn-outline btn-sm" data-invstatus="${inv.id}">${t('inv_mark_status')}</button>
+        <button class="btn btn-outline btn-sm" data-invedit="${inv.id}">${t('inv_edit')}</button>
+        <button class="btn btn-outline btn-sm" data-invprint="${inv.id}">${t('inv_print')}</button>
+        <button class="btn btn-outline btn-sm" data-invword="${inv.id}">${t('inv_word')}</button>
+        <button class="btn btn-outline btn-sm" data-invdel="${inv.id}">${t('inv_delete')}</button>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="em-ic">🧾</div>${t('inv_none')}</div>`;
+
+  return `
+  ${summaryCard}
+  ${renderInvoiceBuilder()}
+  <div class="card">
+    <div class="rowbetween" style="margin-bottom:8px;"><h3 style="margin:0;">${t('inv_list')}</h3></div>
+    <div class="genpicker">${chips}</div>
+  </div>
+  ${cards}
+  `;
+}
+
+function bindInvoices(){
+  document.querySelectorAll('[data-invfilter]').forEach(ch=>{
+    ch.addEventListener('click', ()=>{ STATE.invFilter = ch.dataset.invfilter; render(); });
+  });
+
+  // ---- builder ----
+  const clientSel = document.getElementById('inv-client');
+  if(clientSel) clientSel.addEventListener('change', ()=>{
+    syncInvDraftFromForm();
+    currentInvDraft().genId = '';
+    render();
+  });
+
+  const showInv = document.getElementById('inv-showinvoiced');
+  if(showInv) showInv.addEventListener('change', ()=>{
+    syncInvDraftFromForm();
+    STATE.invShowInvoiced = showInv.checked;
+    render();
+  });
+
+  document.querySelectorAll('[data-invpick]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const d = syncInvDraftFromForm();
+      const [sourceType, ...rest] = cb.dataset.invpick.split(':');
+      const sourceId = rest.join(':');
+      const w = billableWorkItems(d.client, d.id).find(x=>x.sourceType===sourceType && x.sourceId===sourceId);
+      if(w) toggleWorkItemInDraft(w);
+      render();
+    });
+  });
+
+  bindAddItemForm('invadd', line=>{
+    const d = syncInvDraftFromForm();
+    d.lines = d.lines.concat([line]);
+    render();
+  });
+
+  document.querySelectorAll('[data-linerm]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [prefix, idxRaw] = btn.dataset.linerm.split(':');
+      const idx = parseInt(idxRaw, 10);
+      if(prefix !== 'inv') return;
+      const d = syncInvDraftFromForm();
+      d.lines = d.lines.filter((_,i)=>i!==idx);
+      render();
+    });
+  });
+
+  ['inv-discount','inv-paid'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', ()=>{ syncInvDraftFromForm(); render(); });
+  });
+
+  const cancelBtn = document.getElementById('inv-cancel');
+  if(cancelBtn) cancelBtn.addEventListener('click', ()=>{
+    STATE.invDraft = null; STATE.invEditingId = null; render();
+  });
+
+  const saveBtn = document.getElementById('inv-save');
+  if(saveBtn) saveBtn.addEventListener('click', async ()=>{
+    const d = syncInvDraftFromForm();
+    if(!d.client){ showToast(t('inv_need_client')); return; }
+    if(!d.lines.length){ showToast(t('inv_need_lines')); return; }
+    const tt = invoiceTotals(d);
+    const rec = {
+      client: d.client, genId: d.genId || '', date: d.date || todayStr(),
+      dueDate: d.dueDate || '', ref: d.ref || '', notes: d.notes || '',
+      lines: d.lines.map(l=>({
+        kind: l.kind || 'good', sourceType: l.sourceType || 'manual', sourceId: l.sourceId || '',
+        ref: l.ref || '', itemId: l.itemId || '', desc: l.desc || '',
+        qty: parseFloat(l.qty)||0, unitPrice: round2(l.unitPrice), total: lineTotal(l)
+      })),
+      currency: billingCurrency(),
+      subtotal: tt.subtotal, discount: tt.discount, total: tt.total,
+      paidAmount: tt.paid, paidDate: d.paidDate || '',
+      status: d.status || 'draft',
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    saveBtn.disabled = true;
+    try{
+      if(d.id){
+        await db.collection(INVOICES_COLLECTION).doc(d.id).update(rec);
+        showToast(t('inv_updated'));
+      }else{
+        const seq = nextInvoiceSeq();
+        await db.collection(INVOICES_COLLECTION).add(Object.assign({
+          invoiceSeq: seq, invoiceNo: INVOICE_ID_PREFIX + seq
+        }, rec));
+        showToast(t('inv_saved'));
+      }
+      STATE.invDraft = null; STATE.invEditingId = null;
+      render();
+    }catch(e){
+      console.warn('invoice save failed', e);
+      showToast(t('inv_fail'));
+    }finally{ saveBtn.disabled = false; }
+  });
+
+  // ---- list actions ----
+  document.querySelectorAll('[data-invedit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const inv = STATE.invoices.find(i=>i.id===btn.dataset.invedit);
+      if(!inv) return;
+      STATE.invEditingId = inv.id;
+      STATE.invDraft = {
+        id: inv.id, invoiceNo: inv.invoiceNo || '', client: inv.client || '', genId: inv.genId || '',
+        date: inv.date || todayStr(), dueDate: inv.dueDate || '', ref: inv.ref || '', notes: inv.notes || '',
+        lines: (inv.lines||[]).map(l=>Object.assign({}, l)),
+        discount: inv.discount || 0, status: inv.status || 'draft',
+        paidAmount: inv.paidAmount || 0, paidDate: inv.paidDate || ''
+      };
+      render();
+      const top = document.getElementById('inv-client');
+      if(top && top.scrollIntoView) top.scrollIntoView({ behavior:'smooth', block:'center' });
+    });
+  });
+
+  document.querySelectorAll('[data-invpay]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const inv = STATE.invoices.find(i=>i.id===btn.dataset.invpay);
+      if(!inv) return;
+      const tt = invoiceTotals(inv);
+      const answer = prompt(t('inv_payment_prompt'), String(tt.total));
+      if(answer===null) return;
+      const paid = round2(Math.max(0, parseFloat(answer)||0));
+      try{
+        await db.collection(INVOICES_COLLECTION).doc(inv.id).update({
+          paidAmount: paid,
+          paidDate: paid > 0 ? todayStr() : '',
+          status: statusForPayment(inv, paid)
+        });
+        showToast(t('inv_updated'));
+      }catch(e){ console.warn('payment update failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-invstatus]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const inv = STATE.invoices.find(i=>i.id===btn.dataset.invstatus);
+      if(!inv) return;
+      const i = INVOICE_STATUS.indexOf(inv.status || 'draft');
+      const next = INVOICE_STATUS[(i + 1) % INVOICE_STATUS.length];
+      try{
+        await db.collection(INVOICES_COLLECTION).doc(inv.id).update({ status: next });
+        showToast(t('inv_updated'));
+      }catch(e){ console.warn('status update failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-invdel]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('inv_del_confirm'))) return;
+      try{
+        await db.collection(INVOICES_COLLECTION).doc(btn.dataset.invdel).delete();
+        showToast(t('inv_saved'));
+      }catch(e){ console.warn('invoice delete failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-invprint]').forEach(btn=>{
+    btn.addEventListener('click', ()=>printInvoice(btn.dataset.invprint));
+  });
+  document.querySelectorAll('[data-invword]').forEach(btn=>{
+    btn.addEventListener('click', ()=>exportInvoiceWord(btn.dataset.invword));
+  });
+}
+
+/* ================= OFFICIAL INVOICE DOCUMENT (print / Word) ================= */
+function invoiceReportBody(inv){
+  const bi = STATE.lang==='ar';
+  const loc = bi ? 'ar' : undefined;
+  const g = inv.genId ? genById(inv.genId) : null;
+  const tt = invoiceTotals(inv);
+  const cur = inv.currency || billingCurrency();
+  const dstr = inv.date ? new Date(inv.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '–';
+  const field = (label, value) => `
+    <div class="fld"><span class="fl">${label}</span><span class="fv">${value===undefined||value===null||value===''?'–':escHtml(value)}</span></div>`;
+
+  const rows = (inv.lines||[]).map((l,i)=>`
+    <tr>
+      <td class="num">${i+1}</td>
+      <td>${escHtml(l.desc||'')}${l.ref?` <span class="lref">(${escHtml(l.ref)})</span>`:''}</td>
+      <td>${l.kind==='service'?t('inv_kind_service'):t('inv_kind_good')}</td>
+      <td class="num">${parseFloat(l.qty)||0}</td>
+      <td class="num">${moneyNum(l.unitPrice)}</td>
+      <td class="num">${moneyNum(lineTotal(l))}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="hdr">
+      <img src="${REPORT_LOGO_B64}" alt="logo">
+      <div>
+        <div class="t">${t('inv_report_title')} ${escHtml(inv.invoiceNo||'')}</div>
+        <div class="s">EnvironmSafe — Engineering, Trading &amp; Services Ltd.  ·  +967 78 340 2932  ·  www.environmsafe.com</div>
+      </div>
+    </div>
+    <div class="fldgrid">
+      ${field(t('inv_no'), inv.invoiceNo)}
+      ${field(t('inv_bill_to'), inv.client)}
+      ${field(t('inv_date'), dstr)}
+      ${field(t('inv_due_date'), inv.dueDate)}
+      ${field(t('inv_gen'), g ? g.name : t('inv_all_gens'))}
+      ${field(t('inv_ref'), inv.ref)}
+      ${field(t('inv_status'), invStatusLabel(inv.status))}
+      ${field(t('inv_paid_date'), inv.paidDate)}
+      ${field(t('bill_currency'), cur)}
+    </div>
+    <table class="itbl">
+      <thead><tr>
+        <th class="num">#</th><th>${t('inv_line_desc')}</th><th>${t('inv_line_kind')}</th>
+        <th class="num">${t('inv_line_qty')}</th><th class="num">${t('inv_line_price')}</th><th class="num">${t('inv_line_total')}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="totwrap">
+      <table class="tottbl">
+        <tr><td>${t('inv_subtotal')}</td><td class="num">${moneyNum(tt.subtotal)} ${cur}</td></tr>
+        ${tt.discount?`<tr><td>${t('inv_discount')}</td><td class="num">− ${moneyNum(tt.discount)} ${cur}</td></tr>`:''}
+        <tr class="grand"><td>${t('inv_total')}</td><td class="num">${moneyNum(tt.total)} ${cur}</td></tr>
+        ${tt.paid?`<tr><td>${t('inv_paid_amount')}</td><td class="num">${moneyNum(tt.paid)} ${cur}</td></tr>`:''}
+        ${tt.balance>0?`<tr class="bal"><td>${t('inv_balance')}</td><td class="num">${moneyNum(tt.balance)} ${cur}</td></tr>`:''}
+      </table>
+    </div>
+    ${inv.notes?`<div class="blk"><div class="bl">${t('inv_notes')}</div><div class="bv">${escHtml(inv.notes).replace(/\n/g,'<br>')}</div></div>`:''}
+    <div class="terms">${t('inv_terms')}<br>${t('inv_thanks')}</div>
+    <div class="signrow">
+      <div class="signbox">
+        <div class="signtitle">${t('inv_sign_prepared')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+      <div class="signbox">
+        <div class="signtitle">${t('inv_sign_received')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+    </div>`;
+}
+
+const INVOICE_REPORT_CSS = FAULT_REPORT_CSS + `
+    .totwrap{display:flex;justify-content:flex-end;}
+    .tottbl{border-collapse:collapse;font-size:11.5px;min-width:220px;}
+    .tottbl td{padding:5px 8px;border-bottom:1px solid #E4E7EC;}
+    .tottbl .num{text-align:end;white-space:nowrap;font-weight:700;}
+    .tottbl tr.grand td{background:#1B2A4A;color:#fff;font-size:12.5px;font-weight:800;border:none;}
+    .tottbl tr.bal td{color:#C0392B;font-weight:800;}
+    .terms{margin-top:14px;font-size:10.5px;color:#6B7280;}
+`;
+
+function printInvoice(id){
+  const inv = STATE.invoices.find(x=>x.id===id);
+  if(!inv) return;
+  const bi = STATE.lang==='ar';
+  const html = `<!DOCTYPE html><html lang="${bi?'ar':'en'}" dir="${bi?'rtl':'ltr'}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('inv_report_title')} ${escHtml(inv.invoiceNo||'')}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm; }
+    ${INVOICE_REPORT_CSS}
+    @media print{.noprint{display:none;}}
+    .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
+  </style></head><body>
+    <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
+    ${invoiceReportBody(inv)}
+    <script>setTimeout(function(){window.print();}, 400);<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ showToast(bi?'⚠️ اسمح بالنوافذ المنبثقة':'⚠️ Allow pop-ups to export PDF'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+function exportInvoiceWord(id){
+  const inv = STATE.invoices.find(x=>x.id===id);
+  if(!inv) return;
+  const bi = STATE.lang==='ar';
+  const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40" lang="${bi?'ar':'en'}" dir="${bi?'rtl':'ltr'}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('inv_report_title')} ${escHtml(inv.invoiceNo||'')}</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+  <style>
+    @page Section1 { size: 21cm 29.7cm; margin: 2cm; }
+    div.Section1 { page: Section1; }
+    ${INVOICE_REPORT_CSS}
+  </style></head><body>
+    <div class="Section1">${invoiceReportBody(inv)}</div>
+  </body></html>`;
+
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `EnvironmSafe_${(inv.invoiceNo||'Invoice').replace(/[^a-zA-Z0-9_-]+/g,'_')}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('corr_word_downloaded'));
+}
+
+/* ================= PRICE LIST + BILLING SETTINGS (Setup tab) ================= */
+function renderPriceListEditor(){
+  const rows = STATE.pricelist.slice()
+    .sort((a,b)=>priceItemLabel(a).localeCompare(priceItemLabel(b)))
+    .map(i=>{
+      const inactive = i.active===false;
+      return `<div class="pl-row${inactive?' pl-inactive':''}">
+        <div class="pl-name">${escHtml(priceItemLabel(i))}
+          <span class="cf-type">(${escHtml(i.unit || t('pl_unit_each'))})</span>
+          ${inactive?` <span class="cf-inactive-tag">${t('pl_inactive')}</span>`:''}</div>
+        <div class="pl-price money">${moneyNum(i.unitPrice)}</div>
+        <div class="pl-actions">
+          <button class="btn btn-outline btn-sm" data-pledit="${i.id}">${t('pl_edit')}</button>
+          <button class="btn btn-outline btn-sm" data-pltoggle="${i.id}">${inactive?t('pl_activate'):t('pl_deactivate')}</button>
+          <button class="btn btn-danger btn-sm" data-pldel="${i.id}">${t('pl_delete')}</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  return `<div class="card">
+    <h3>${t('pl_title')}</h3>
+    <div class="hint">${t('pl_hint')}</div>
+    ${rows || `<div class="hint">${t('pl_none')}</div>`}
+    <div class="grid2">
+      <div><label>${t('pl_name_ar')}</label><input type="text" id="pl-name-ar" placeholder="—"></div>
+      <div><label>${t('pl_name_en')}</label><input type="text" id="pl-name-en" placeholder="—"></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('pl_unit')}</label><input type="text" id="pl-unit" placeholder="${t('pl_unit_each')}"></div>
+      <div><label>${t('pl_price')}</label><input type="number" step="0.01" min="0" id="pl-price" placeholder="0.00"></div>
+    </div>
+    <button class="btn btn-primary" id="pl-add" style="margin-top:12px;">${t('pl_add')}</button>
+  </div>`;
+}
+
+function renderBillingSettings(){
+  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  return `<div class="card">
+    <h3>${t('bill_title')}</h3>
+    <div class="hint">${t('bill_hint')}</div>
+    <div class="grid2">
+      <div><label>${t('bill_service_rate')}</label>
+        <input type="number" step="0.01" min="0" id="bill-rate" value="${esc(serviceRate())}"></div>
+      <div><label>${t('bill_currency')}</label>
+        <input type="text" id="bill-currency" value="${esc(billingCurrency())}"></div>
+    </div>
+    <button class="btn btn-primary" id="bill-save" style="margin-top:12px;">${t('bill_save')}</button>
+  </div>`;
+}
+
+function bindPriceListEditor(){
+  document.querySelectorAll('[data-pltoggle]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const i = priceItemById(btn.dataset.pltoggle);
+      if(!i) return;
+      try{
+        await db.collection(PRICELIST_COLLECTION).doc(i.id).update({ active: i.active===false });
+      }catch(e){ console.warn('toggle price item failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-pledit]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const i = priceItemById(btn.dataset.pledit);
+      if(!i) return;
+      const name = prompt(t('pl_name_prompt'), priceItemLabel(i));
+      if(name===null) return;
+      const priceRaw = prompt(t('pl_price_prompt'), String(round2(i.unitPrice)));
+      if(priceRaw===null) return;
+      const patch = { unitPrice: round2(parseFloat(priceRaw)||0) };
+      if(name.trim()){
+        if(STATE.lang==='ar') patch.nameAr = name.trim(); else patch.nameEn = name.trim();
+      }
+      try{
+        await db.collection(PRICELIST_COLLECTION).doc(i.id).update(patch);
+        showToast(t('pl_added'));
+      }catch(e){ console.warn('edit price item failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  document.querySelectorAll('[data-pldel]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(t('pl_del_confirm'))) return;
+      try{
+        await db.collection(PRICELIST_COLLECTION).doc(btn.dataset.pldel).delete();
+      }catch(e){ console.warn('delete price item failed', e); showToast(t('inv_fail')); }
+    });
+  });
+
+  const addBtn = document.getElementById('pl-add');
+  if(addBtn) addBtn.addEventListener('click', async ()=>{
+    const nameAr = document.getElementById('pl-name-ar').value.trim();
+    const nameEn = document.getElementById('pl-name-en').value.trim();
+    if(!nameAr && !nameEn){ showToast(t('pl_need_name')); return; }
+    const unit = document.getElementById('pl-unit').value.trim();
+    const unitPrice = round2(parseFloat(document.getElementById('pl-price').value)||0);
+    addBtn.disabled = true;
+    try{
+      await db.collection(PRICELIST_COLLECTION).add({
+        nameAr, nameEn, unit, unitPrice, active: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast(t('pl_added'));
+      ['pl-name-ar','pl-name-en','pl-unit','pl-price'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    }catch(e){
+      console.warn('add price item failed', e);
+      showToast(t('inv_fail'));
+    }finally{ addBtn.disabled = false; }
+  });
+
+  const billBtn = document.getElementById('bill-save');
+  if(billBtn) billBtn.addEventListener('click', async ()=>{
+    const rate = round2(parseFloat(document.getElementById('bill-rate').value)||0);
+    const currency = (document.getElementById('bill-currency').value||'').trim() || DEFAULT_CURRENCY;
+    billBtn.disabled = true;
+    try{
+      await db.collection(SETTINGS_COLLECTION).doc(BILLING_DOC).set({ serviceRate: rate, currency }, { merge: true });
+      showToast(t('bill_saved'));
+    }catch(e){
+      console.warn('billing settings save failed', e);
+      showToast(t('inv_fail'));
+    }finally{ billBtn.disabled = false; }
   });
 }
 
@@ -3142,6 +4491,9 @@ const LABEL_CATEGORY_PREFIXES = [
   ['title_', 'cat_tabheaders'],
   ['sub_', 'cat_tabheaders'],
   ['corr_', 'cat_faults'],
+  ['inv_', 'cat_billing'],
+  ['pl_', 'cat_billing'],
+  ['bill_', 'cat_billing'],
   ['maint_', 'cat_maint'],
   ['svc_', 'cat_maint'],
   ['rep_', 'cat_reports'],
@@ -3152,7 +4504,7 @@ const LABEL_CATEGORY_PREFIXES = [
   ['warn_', 'cat_warnerr'],
   ['err_', 'cat_warnerr'],
 ];
-const LABEL_CATEGORY_ORDER = ['cat_tabs','cat_tabheaders','cat_faults','cat_maint','cat_reports','cat_readings','cat_warnerr','cat_general'];
+const LABEL_CATEGORY_ORDER = ['cat_tabs','cat_tabheaders','cat_faults','cat_billing','cat_maint','cat_reports','cat_readings','cat_warnerr','cat_general'];
 
 function categoryForLabelKey(key){
   for(const [prefix, cat] of LABEL_CATEGORY_PREFIXES){
@@ -3470,6 +4822,8 @@ function renderGenerators(){
       support@environmsafe.com · +967 78 340 2932 · www.environmsafe.com
     </div>
   </div>
+  ${renderBillingSettings()}
+  ${renderPriceListEditor()}
   ${renderCustomFieldsEditor()}
   ${renderLabelsEditor()}
   `;
@@ -3478,6 +4832,7 @@ function renderGenerators(){
 function bindGenerators(){
   bindLabelsEditor();
   bindCustomFieldsEditor();
+  bindPriceListEditor();
 
   document.getElementById('addGenBtn').addEventListener('click', async ()=>{
     const name = document.getElementById('ng-name').value.trim();

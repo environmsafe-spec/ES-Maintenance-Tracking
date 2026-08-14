@@ -89,11 +89,11 @@ function run(sb,c){return vm.runInContext(c,sb);}
     STATE.reportFrom='2024-07-01'; STATE.reportTo='2026-07-31';`);
   rt = run(sb,'buildReportTable()');
   check('fleet fault report includes both generators', rt.body.length===2, 'got '+rt.body.length);
-  check('generator column present (14 base + 1)', rt.headers.length===15, 'got '+rt.headers.length);
+  check('generator column present (16 base + 1)', rt.headers.length===17, 'got '+rt.headers.length);
   check('severity flagged at shifted index', rt.bad.some(r=>r.indexOf(true)>=0), JSON.stringify(rt.bad));
   run(sb,`STATE.reportGenId='g1';`);
   rt = run(sb,'buildReportTable()');
-  check('single-gen fault report has no generator column (14)', rt.headers.length===14, 'got '+rt.headers.length);
+  check('single-gen fault report has no generator column (16)', rt.headers.length===16, 'got '+rt.headers.length);
 
   console.log('\\n=== Service log is written when a service is performed ===');
   const before = run(sb,'__added.length');
@@ -118,8 +118,8 @@ function run(sb,c){return vm.runInContext(c,sb);}
   console.log('\\n=== Full data backup workbook ===');
   run(sb,'exportFullBackup()');
   const sheets = run(sb,'__sheets.map(s=>s.name)');
-  check('backup has all 5 sheets',
-        JSON.stringify(sheets)===JSON.stringify(['Generators','Readings','ServiceHistory','Faults','MaintBaselines']),
+  check('backup has all 8 sheets',
+        JSON.stringify(sheets)===JSON.stringify(['Generators','Readings','ServiceHistory','Faults','MaintBaselines','PriceList','Invoices','InvoiceLines']),
         JSON.stringify(sheets));
   const svcSheet = run(sb,`__sheets.find(s=>s.name==='ServiceHistory').rows`);
   check('service history sheet has header + 5 rows', svcSheet===6, 'got '+svcSheet);

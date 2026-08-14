@@ -232,6 +232,11 @@
   .linetable .line-rm{background:none;border:none;color:var(--bad);font-size:15px;line-height:1;
     cursor:pointer;padding:2px 6px;min-height:32px;}
   .line-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+  .cell-in{width:64px;padding:5px 6px;font-size:12px;text-align:end;margin:0;min-height:34px;}
+  .issue-opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
+  .issue-opts .io{flex:1;min-width:130px;}
+  .issue-opts label{font-size:10.5px;margin-bottom:3px;}
+  .issue-opts select{margin:0;min-height:38px;font-size:12.5px;}
 
   .totbox{border-top:2px solid var(--navy);margin-top:8px;padding-top:8px;}
   .totrow{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;}
@@ -370,8 +375,12 @@ const INVOICES_COLLECTION = 'invoices';     // one doc per invoice, with its lin
 
 // Billing
 const BILLING_DOC = 'billing';              // settings/billing -> { serviceRate, currency }
-const DEFAULT_SERVICE_RATE = 180;           // USD charged per fault or per scheduled service
+const DEFAULT_SERVICE_RATE = 180;           // USD per corrective (fault) visit  — FAO contract Option 2
+const DEFAULT_ROUTINE_RATE = 22;            // USD per routine/preventive visit  — confirm against the contract
 const DEFAULT_CURRENCY = 'USD';
+// How an invoice document is issued: which lines it shows, and at what level of detail.
+const INVOICE_SCOPES = ['all','services','goods'];
+const INVOICE_DETAILS = ['detailed','summary'];
 const INVOICE_ID_PREFIX = 'INV-';
 const INVOICE_ID_START = 1001;
 const INVOICE_STATUS = ['draft','sent','partly_paid','paid','cancelled'];
@@ -590,6 +599,21 @@ const I18N = {
     bill_service_rate:'أجرة الخدمة الواحدة', bill_currency:'العملة', bill_save:'حفظ الإعدادات',
     bill_saved:'✅ تم حفظ إعدادات الفوترة',
 
+    inv_order_no:'رقم الطلب', inv_contract_no:'رقم العقد / FRA', inv_serial_no:'الرقم التسلسلي',
+    inv_issue_opts:'خيارات الإصدار',
+    inv_scope:'المحتوى', inv_scope_all:'خدمات وأصناف', inv_scope_services:'الخدمات فقط', inv_scope_goods:'الأصناف فقط',
+    inv_detail:'التفصيل', inv_detail_detailed:'تفصيلي', inv_detail_summary:'إجمالي',
+    inv_sum_corrective:'زيارات صيانة تصحيحية (أعطال)',
+    inv_sum_routine:'زيارات صيانة دورية (250 ساعة)',
+    inv_doc_subtotal:'إجمالي هذا الإصدار',
+    inv_partial_note:'هذا إصدار جزئي من الفاتورة ويشمل البنود المذكورة أعلاه فقط.',
+    inv_bank_title:'بيانات الحساب البنكي للتحويل',
+    inv_bank_acct:'رقم الحساب',
+    bill_routine_rate:'أجرة الزيارة الدورية (250 ساعة)',
+    bill_corrective_rate:'أجرة زيارة العطل (تصحيحية)',
+    bill_bank1_name:'اسم البنك الأول', bill_bank1_acct:'رقم الحساب الأول',
+    bill_bank2_name:'اسم البنك الثاني', bill_bank2_acct:'رقم الحساب الثاني',
+    bill_banks_hint:'تظهر هذه البيانات في أسفل كل فاتورة مطبوعة.',
     rep_invoices:'الفواتير', rep_invoices_title:'تقرير الفواتير',
     rep_photos_title:'الصور المرفقة',
     labels_title:'تخصيص النصوص والتبويبات', labels_hint:'غيّر أي نص يظهر في التطبيق (عربي/إنجليزي). اترك الحقل فارغًا لاستخدام النص الافتراضي.',
@@ -789,6 +813,21 @@ const I18N = {
     bill_service_rate:'Service fee per job', bill_currency:'Currency', bill_save:'Save settings',
     bill_saved:'✅ Billing settings saved',
 
+    inv_order_no:'Order number', inv_contract_no:'FRA / Contract No.', inv_serial_no:'Serial No.',
+    inv_issue_opts:'Issue options',
+    inv_scope:'Contents', inv_scope_all:'Services + goods', inv_scope_services:'Services only', inv_scope_goods:'Goods only',
+    inv_detail:'Detail', inv_detail_detailed:'Detailed', inv_detail_summary:'Summary',
+    inv_sum_corrective:'Corrective maintenance visits (faults)',
+    inv_sum_routine:'Routine maintenance visits (250 h)',
+    inv_doc_subtotal:'Total for this issue',
+    inv_partial_note:'This is a partial issue of the invoice and covers only the lines listed above.',
+    inv_bank_title:'Bank account details for payment',
+    inv_bank_acct:'Account No.',
+    bill_routine_rate:'Routine visit fee (250 h)',
+    bill_corrective_rate:'Corrective (fault) visit fee',
+    bill_bank1_name:'Bank 1 name', bill_bank1_acct:'Bank 1 account no.',
+    bill_bank2_name:'Bank 2 name', bill_bank2_acct:'Bank 2 account no.',
+    bill_banks_hint:'These appear at the bottom of every printed invoice.',
     rep_invoices:'Invoices', rep_invoices_title:'Invoices report',
     rep_photos_title:'Attached Photos',
     labels_title:'Customize labels & tabs', labels_hint:'Rename any text shown in the app (Arabic/English). Leave a field blank to keep the default text.',
@@ -2272,18 +2311,20 @@ function buildReportTable(){
   if(type==='invoices'){
     const rows = invReportRows();
     const cur = billingCurrency();
-    const headers = [t('inv_no'), t('inv_date'), t('inv_client'), t('inv_gen'), t('inv_due_date'), t('inv_status'),
+    const headers = [t('inv_no'), t('inv_date'), t('inv_client'), t('inv_gen'), t('inv_order_no'), t('inv_contract_no'), t('inv_due_date'), t('inv_status'),
                      t('inv_subtotal')+' ('+cur+')', t('inv_discount')+' ('+cur+')', t('inv_total')+' ('+cur+')',
                      t('inv_paid_amount')+' ('+cur+')', t('inv_balance')+' ('+cur+')', t('inv_ref')];
     const body = rows.map(inv=>{
       const tt = invoiceTotals(inv);
       const gg = inv.genId ? genById(inv.genId) : null;
       return [inv.invoiceNo||'', inv.date ? new Date(inv.date+'T00:00:00').toLocaleDateString(loc) : '',
-              inv.client||'', gg?gg.name:t('inv_all_gens'), inv.dueDate||'', invStatusLabel(inv.status),
+              inv.client||'', gg?gg.name:t('inv_all_gens'), inv.orderNo||'', inv.contractNo||'',
+              inv.dueDate||'', invStatusLabel(inv.status),
               moneyNum(tt.subtotal), moneyNum(tt.discount), moneyNum(tt.total),
               moneyNum(tt.paid), moneyNum(tt.balance), inv.ref||''];
     });
-    const bad = rows.map(inv=> headers.map((h,i)=> i===10 && invoiceTotals(inv).balance > 0));
+    const balIdx = headers.length - 2;
+    const bad = rows.map(inv=> headers.map((h,i)=> i===balIdx && invoiceTotals(inv).balance > 0));
     let totT = 0, totP = 0;
     rows.forEach(inv=>{ if(inv.status!=='cancelled'){ const tt=invoiceTotals(inv); totT+=tt.total; totP+=tt.paid; } });
     return { type, headers, body, bad,
@@ -2370,16 +2411,17 @@ function exportFullBackup(){
       .map(i=>[i.nameAr||'', i.nameEn||'', i.unit||'', round2(i.unitPrice), i.active===false?'no':'yes']));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(price), 'PriceList');
 
-  const invs = [['invoiceNo','date','client','generator','dueDate','status','currency','subtotal','discount','total','paid','balance','ref','notes']];
-  const invLines = [['invoiceNo','kind','sourceType','ref','description','qty','unitPrice','total']];
+  const invs = [['invoiceNo','date','client','generator','orderNo','contractNo','serialNo','dueDate','status','currency','subtotal','discount','total','paid','balance','ref','notes']];
+  const invLines = [['invoiceNo','kind','sourceType','generator','ref','description','qty','unitPrice','total']];
   STATE.invoices.slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||''))).forEach(inv=>{
     const tt = invoiceTotals(inv);
-    invs.push([inv.invoiceNo||'', inv.date||'', inv.client||'', inv.genId?nameOf(inv.genId):'', inv.dueDate||'',
+    invs.push([inv.invoiceNo||'', inv.date||'', inv.client||'', inv.genId?nameOf(inv.genId):'',
+               inv.orderNo||'', inv.contractNo||'', inv.serialNo||'', inv.dueDate||'',
                inv.status||'', inv.currency||billingCurrency(), tt.subtotal, tt.discount, tt.total, tt.paid, tt.balance,
                inv.ref||'', inv.notes||'']);
     (inv.lines||[]).forEach(l=>{
-      invLines.push([inv.invoiceNo||'', l.kind||'', l.sourceType||'', l.ref||'', l.desc||'',
-                     parseFloat(l.qty)||0, round2(l.unitPrice), lineTotal(l)]);
+      invLines.push([inv.invoiceNo||'', l.kind||'', l.sourceType||'', l.genName||(l.genId?nameOf(l.genId):''),
+                     l.ref||'', l.desc||'', parseFloat(l.qty)||0, round2(l.unitPrice), lineTotal(l)]);
     });
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invs), 'Invoices');
@@ -3149,7 +3191,7 @@ function renderFaultBillingBlock(c, prefix, lines){
     <div class="hint">${t('corr_billing_hint')}</div>
     <label>${t('corr_service_fee')} (${billingCurrency()})</label>
     <input type="number" step="0.01" min="0" id="${prefix}-fee" value="${round2(fee)}">
-    ${renderLineEditor(lines, prefix+'line', { emptyText: '—' })}
+    ${renderLineEditor(lines, prefix+'line', { emptyText: '—', editable: true })}
     ${renderAddItemForm(prefix+'add')}
     <div class="totbox">
       <div class="totrow grand"><span>${t('corr_billable_total')}</span><span class="money">${money(total)}</span></div>
@@ -3187,6 +3229,21 @@ function bindFaultBillingBlock(prefix, getLines, setLines){
     btn.addEventListener('click', ()=>{
       const idx = parseInt(btn.dataset.linerm.split(':')[1], 10);
       setLines(getLines().filter((_,i)=>i!==idx));
+      rerenderPreservingCorrForm();
+    });
+  });
+  document.querySelectorAll(`[data-lineqty^="${prefix}line:"], [data-lineprice^="${prefix}line:"]`).forEach(el=>{
+    const isQty = el.hasAttribute('data-lineqty');
+    const idx = parseInt((isQty ? el.dataset.lineqty : el.dataset.lineprice).split(':')[1], 10);
+    el.addEventListener('change', ()=>{
+      const next = getLines().map((l,i)=>{
+        if(i!==idx) return l;
+        const v = String(el.value||'').trim()==='' ? 0 : round2(parseFloat(el.value)||0);
+        const patched = Object.assign({}, l, isQty ? { qty: v } : { unitPrice: v });
+        patched.total = lineTotal(patched);
+        return patched;
+      });
+      setLines(next);
       rerenderPreservingCorrForm();
     });
   });
@@ -3593,6 +3650,20 @@ function serviceRate(){
   return (isNaN(r) || r < 0) ? DEFAULT_SERVICE_RATE : r;
 }
 
+// Routine/preventive visits are charged at their own (much lower) contract rate.
+function routineRate(){
+  const r = parseFloat(STATE.billing.routineRate);
+  return (isNaN(r) || r < 0) ? DEFAULT_ROUTINE_RATE : r;
+}
+
+function bankAccounts(){
+  const b = STATE.billing || {};
+  return [
+    { name: b.bank1Name || '', acct: b.bank1Acct || '' },
+    { name: b.bank2Name || '', acct: b.bank2Acct || '' }
+  ].filter(x=>x.name || x.acct);
+}
+
 function round2(n){
   const v = Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
   return Object.is(v, -0) ? 0 : v;
@@ -3689,7 +3760,7 @@ function billableWorkItems(client, exceptInvoiceId){
   serviceVisits().forEach(v=>{
     const g = genById(v.genId);
     if(client && (!g || g.client !== client)) return;
-    const fee = serviceRate();
+    const fee = routineRate();
     items.push({
       sourceType:'service', sourceId: v.key, ref: '',
       date: v.date, genId: v.genId, genName: g ? g.name : '—',
@@ -3710,18 +3781,85 @@ function linesFromWorkItem(w){
   const detail = [w.genName, w.ref || w.title].filter(Boolean).join(' — ');
   lines.push({
     kind:'service', sourceType:w.sourceType, sourceId:w.sourceId, ref:w.ref || '',
+    genId: w.genId || '', genName: w.genName || '',
     desc: what + (detail ? ' — ' + detail : ''),
     qty: 1, unitPrice: round2(w.fee), total: round2(w.fee)
   });
   (w.parts||[]).forEach(p=>{
     lines.push({
       kind:'good', sourceType:w.sourceType, sourceId:w.sourceId, ref:w.ref || '',
+      genId: w.genId || '', genName: w.genName || '',
       desc: p.name || '', qty: (parseFloat(p.qty)||0), unitPrice: round2(p.unitPrice),
       total: lineTotal(p)
     });
   });
   return lines;
 }
+
+/* ---- how an invoice is ISSUED: scope (services / goods / both) and detail level ----
+   These only shape the DOCUMENT. The stored invoice always keeps every line, so its own
+   total never changes and no record is ever lost. A scoped document prints its own
+   subtotal for the part being issued. */
+function scopeLines(lines, scope){
+  const ls = lines || [];
+  if(scope==='services') return ls.filter(l=>l.kind==='service');
+  if(scope==='goods')    return ls.filter(l=>l.kind!=='service');
+  return ls.slice();
+}
+
+// Summary mode: no per-fault detail. Each generator gets one line for its corrective
+// visits and one for its routine visits, carrying the TOTAL QUANTITY for the period.
+// Lines are grouped by unit price too, so a mixed rate can never distort the total.
+function summariseLines(lines){
+  const groups = [];
+  const index = {};
+  (lines||[]).forEach(l=>{
+    const isService = l.kind==='service';
+    const gname = l.genName || '';
+    const key = [isService?'s':'g', l.genId||'', isService?(l.sourceType||''):(l.desc||''), round2(l.unitPrice)].join('|');
+    if(!index[key]){
+      let desc;
+      if(isService){
+        const what = l.sourceType==='service' ? t('inv_sum_routine') : t('inv_sum_corrective');
+        desc = gname ? (gname + ' — ' + what) : what;
+      }else{
+        desc = (l.desc||'') + (gname ? ' — ' + gname : '');
+      }
+      index[key] = { kind: l.kind, sourceType: l.sourceType, genId: l.genId||'', genName: gname,
+                     desc, qty: 0, unitPrice: round2(l.unitPrice), total: 0, ref: '' };
+      groups.push(index[key]);
+    }
+    const g = index[key];
+    g.qty = round2(g.qty + (parseFloat(l.qty)||0));
+    g.total = round2(g.total + lineTotal(l));
+  });
+  // services first, then goods; within each, by generator name
+  return groups.sort((a,b)=>{
+    if((a.kind==='service') !== (b.kind==='service')) return a.kind==='service' ? -1 : 1;
+    return String(a.genName||a.desc).localeCompare(String(b.genName||b.desc));
+  });
+}
+
+// The lines that a document actually prints, for a given scope + detail level.
+function documentLines(inv, scope, detail){
+  const scoped = scopeLines(inv && inv.lines, scope || 'all');
+  return (detail==='summary') ? summariseLines(scoped) : scoped;
+}
+
+// Totals for the printed document. When the whole invoice is issued these match the
+// stored totals exactly (discount and payments included); a partial scope prints only
+// its own subtotal and does not pretend to carry the discount or the payment.
+function documentTotals(inv, scope, detail){
+  const lines = documentLines(inv, scope, detail);
+  const subtotal = linesSubtotal(lines);
+  const full = invoiceTotals(inv);
+  const partial = (scope && scope !== 'all');
+  if(!partial) return Object.assign({}, full, { subtotal, partial: false });
+  return { subtotal, discount: 0, total: subtotal, paid: 0, balance: subtotal, partial: true };
+}
+
+function invScopeLabel(v){ return t('inv_scope_' + (v||'all')); }
+function invDetailLabel(v){ return t('inv_detail_' + (v||'detailed')); }
 
 /* ---- invoice numbering & totals ---- */
 function nextInvoiceSeq(){
@@ -3784,7 +3922,8 @@ function blankInvoiceDraft(){
   const clients = clientList();
   return {
     id: null, client: clients[0] || '', genId: '', date: todayStr(), dueDate: '',
-    ref: '', notes: '', lines: [], discount: 0, status: 'draft', paidAmount: 0, paidDate: ''
+    ref: '', orderNo: '', contractNo: '', serialNo: '',
+    notes: '', lines: [], discount: 0, status: 'draft', paidAmount: 0, paidDate: ''
   };
 }
 
@@ -3818,6 +3957,7 @@ function syncInvDraftFromForm(){
   };
   setIf('inv-client','client'); setIf('inv-gen','genId'); setIf('inv-date','date');
   setIf('inv-duedate','dueDate'); setIf('inv-ref','ref'); setIf('inv-notes','notes');
+  setIf('inv-orderno','orderNo'); setIf('inv-contractno','contractNo'); setIf('inv-serialno','serialNo');
   setIf('inv-status','status'); setIf('inv-discount','discount', true);
   setIf('inv-paid','paidAmount', true); setIf('inv-paiddate','paidDate');
   return d;
@@ -3828,11 +3968,16 @@ function syncInvDraftFromForm(){
 function renderLineEditor(lines, prefix, opts){
   opts = opts || {};
   if(!lines || !lines.length) return `<div class="line-empty">${opts.emptyText || '—'}</div>`;
+  const editable = !opts.readOnly && opts.editable;
   const rows = lines.map((l,i)=>`
     <tr class="${l.kind==='service'?'line-service':''}">
       <td>${escHtml(l.desc||'')}${l.ref?`<span class="line-ref">${escHtml(l.ref)}</span>`:''}</td>
-      <td class="num">${(parseFloat(l.qty)||0)}</td>
-      <td class="num"><span class="money">${moneyNum(l.unitPrice)}</span></td>
+      <td class="num">${editable
+        ? `<input class="cell-in" type="number" step="0.01" min="0" value="${parseFloat(l.qty)||0}" data-lineqty="${prefix}:${i}">`
+        : (parseFloat(l.qty)||0)}</td>
+      <td class="num">${editable
+        ? `<input class="cell-in" type="number" step="0.01" min="0" value="${round2(l.unitPrice)}" data-lineprice="${prefix}:${i}">`
+        : `<span class="money">${moneyNum(l.unitPrice)}</span>`}</td>
       <td class="num"><span class="money">${moneyNum(lineTotal(l))}</span></td>
       ${opts.readOnly?'':`<td class="num"><button type="button" class="line-rm" data-linerm="${prefix}:${i}" aria-label="remove">✕</button></td>`}
     </tr>`).join('');
@@ -3938,6 +4083,12 @@ function renderInvoiceBuilder(){
       <div><label>${t('inv_date')}</label><input type="date" id="inv-date" value="${esc(d.date)}"></div>
       <div><label>${t('inv_due_date')}</label><input type="date" id="inv-duedate" value="${esc(d.dueDate)}"></div>
     </div>
+    <div class="grid2">
+      <div><label>${t('inv_order_no')}</label><input type="text" id="inv-orderno" value="${esc(d.orderNo)}" placeholder="—"></div>
+      <div><label>${t('inv_serial_no')}</label><input type="text" id="inv-serialno" value="${esc(d.serialNo)}" placeholder="—"></div>
+    </div>
+    <label>${t('inv_contract_no')}</label>
+    <input type="text" id="inv-contractno" value="${esc(d.contractNo)}" placeholder="—">
     <label>${t('inv_ref')}</label>
     <input type="text" id="inv-ref" value="${esc(d.ref)}" placeholder="—">
 
@@ -3957,7 +4108,7 @@ function renderInvoiceBuilder(){
 
     <hr class="section-sep">
     <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('inv_lines')}</h4>
-    ${renderLineEditor(d.lines, 'inv', { emptyText: '—' })}
+    ${renderLineEditor(d.lines, 'inv', { emptyText: '—', editable: true })}
 
     <div class="grid2">
       <div><label>${t('inv_discount')} (${billingCurrency()})</label><input type="number" step="0.01" min="0" id="inv-discount" value="${esc(d.discount||0)}"></div>
@@ -4037,12 +4188,26 @@ function renderInvoices(){
         ${tt.balance>0?`<div class="totrow due"><span>${t('inv_balance')}</span><span class="money">${money(tt.balance)}</span></div>`:''}
       </div>
       ${inv.notes?`<div style="font-size:12px;margin-top:6px;color:var(--muted);white-space:pre-wrap;">${escHtml(inv.notes)}</div>`:''}
+      <div class="issue-opts">
+        <div class="io">
+          <label>${t('inv_scope')}</label>
+          <select data-invscope="${inv.id}">
+            ${INVOICE_SCOPES.map(v=>`<option value="${v}">${invScopeLabel(v)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="io">
+          <label>${t('inv_detail')}</label>
+          <select data-invdetail="${inv.id}">
+            ${INVOICE_DETAILS.map(v=>`<option value="${v}">${invDetailLabel(v)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" data-invprint="${inv.id}">${t('inv_print')}</button>
+        <button class="btn btn-outline btn-sm" data-invword="${inv.id}">${t('inv_word')}</button>
         <button class="btn btn-outline btn-sm" data-invpay="${inv.id}">${t('inv_record_payment')}</button>
         <button class="btn btn-outline btn-sm" data-invstatus="${inv.id}">${t('inv_mark_status')}</button>
         <button class="btn btn-outline btn-sm" data-invedit="${inv.id}">${t('inv_edit')}</button>
-        <button class="btn btn-outline btn-sm" data-invprint="${inv.id}">${t('inv_print')}</button>
-        <button class="btn btn-outline btn-sm" data-invword="${inv.id}">${t('inv_word')}</button>
         <button class="btn btn-outline btn-sm" data-invdel="${inv.id}">${t('inv_delete')}</button>
       </div>
     </div>`;
@@ -4107,6 +4272,22 @@ function bindInvoices(){
     });
   });
 
+  document.querySelectorAll('[data-lineqty], [data-lineprice]').forEach(el=>{
+    const isQty = el.hasAttribute('data-lineqty');
+    const token = isQty ? el.dataset.lineqty : el.dataset.lineprice;
+    const [prefix, idxRaw] = token.split(':');
+    if(prefix !== 'inv') return;
+    el.addEventListener('change', ()=>{
+      const d = syncInvDraftFromForm();
+      const line = d.lines[parseInt(idxRaw, 10)];
+      if(!line) return;
+      const v = String(el.value||'').trim()==='' ? 0 : round2(parseFloat(el.value)||0);
+      if(isQty) line.qty = v; else line.unitPrice = v;
+      line.total = lineTotal(line);
+      render();
+    });
+  });
+
   ['inv-discount','inv-paid'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('change', ()=>{ syncInvDraftFromForm(); render(); });
@@ -4126,9 +4307,11 @@ function bindInvoices(){
     const rec = {
       client: d.client, genId: d.genId || '', date: d.date || todayStr(),
       dueDate: d.dueDate || '', ref: d.ref || '', notes: d.notes || '',
+      orderNo: d.orderNo || '', contractNo: d.contractNo || '', serialNo: d.serialNo || '',
       lines: d.lines.map(l=>({
         kind: l.kind || 'good', sourceType: l.sourceType || 'manual', sourceId: l.sourceId || '',
         ref: l.ref || '', itemId: l.itemId || '', desc: l.desc || '',
+        genId: l.genId || '', genName: l.genName || '',
         qty: parseFloat(l.qty)||0, unitPrice: round2(l.unitPrice), total: lineTotal(l)
       })),
       currency: billingCurrency(),
@@ -4166,6 +4349,7 @@ function bindInvoices(){
       STATE.invDraft = {
         id: inv.id, invoiceNo: inv.invoiceNo || '', client: inv.client || '', genId: inv.genId || '',
         date: inv.date || todayStr(), dueDate: inv.dueDate || '', ref: inv.ref || '', notes: inv.notes || '',
+        orderNo: inv.orderNo || '', contractNo: inv.contractNo || '', serialNo: inv.serialNo || '',
         lines: (inv.lines||[]).map(l=>Object.assign({}, l)),
         discount: inv.discount || 0, status: inv.status || 'draft',
         paidAmount: inv.paidAmount || 0, paidDate: inv.paidDate || ''
@@ -4218,34 +4402,58 @@ function bindInvoices(){
     });
   });
 
+  const chosenOpts = id => {
+    const sc = document.querySelector(`[data-invscope="${id}"]`);
+    const dt = document.querySelector(`[data-invdetail="${id}"]`);
+    return { scope: sc ? sc.value : 'all', detail: dt ? dt.value : 'detailed' };
+  };
   document.querySelectorAll('[data-invprint]').forEach(btn=>{
-    btn.addEventListener('click', ()=>printInvoice(btn.dataset.invprint));
+    btn.addEventListener('click', ()=>{
+      const o = chosenOpts(btn.dataset.invprint);
+      printInvoice(btn.dataset.invprint, o.scope, o.detail);
+    });
   });
   document.querySelectorAll('[data-invword]').forEach(btn=>{
-    btn.addEventListener('click', ()=>exportInvoiceWord(btn.dataset.invword));
+    btn.addEventListener('click', ()=>{
+      const o = chosenOpts(btn.dataset.invword);
+      exportInvoiceWord(btn.dataset.invword, o.scope, o.detail);
+    });
   });
 }
 
 /* ================= OFFICIAL INVOICE DOCUMENT (print / Word) ================= */
-function invoiceReportBody(inv){
+function invoiceReportBody(inv, scope, detail){
+  scope = INVOICE_SCOPES.indexOf(scope) >= 0 ? scope : 'all';
+  detail = INVOICE_DETAILS.indexOf(detail) >= 0 ? detail : 'detailed';
   const bi = STATE.lang==='ar';
   const loc = bi ? 'ar' : undefined;
   const g = inv.genId ? genById(inv.genId) : null;
-  const tt = invoiceTotals(inv);
+  const tt = documentTotals(inv, scope, detail);
   const cur = inv.currency || billingCurrency();
   const dstr = inv.date ? new Date(inv.date+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '–';
   const field = (label, value) => `
     <div class="fld"><span class="fl">${label}</span><span class="fv">${value===undefined||value===null||value===''?'–':escHtml(value)}</span></div>`;
 
-  const rows = (inv.lines||[]).map((l,i)=>`
+  const docLines = documentLines(inv, scope, detail);
+  const rows = docLines.map((l,i)=>`
     <tr>
       <td class="num">${i+1}</td>
-      <td>${escHtml(l.desc||'')}${l.ref?` <span class="lref">(${escHtml(l.ref)})</span>`:''}</td>
+      <td>${escHtml(l.desc||'')}${(detail!=='summary' && l.ref)?` <span class="lref">(${escHtml(l.ref)})</span>`:''}</td>
       <td>${l.kind==='service'?t('inv_kind_service'):t('inv_kind_good')}</td>
       <td class="num">${parseFloat(l.qty)||0}</td>
       <td class="num">${moneyNum(l.unitPrice)}</td>
       <td class="num">${moneyNum(lineTotal(l))}</td>
     </tr>`).join('');
+
+  const banks = bankAccounts();
+  const bankBlock = banks.length ? `
+    <div class="blk bankblk">
+      <div class="bl">${t('inv_bank_title')}</div>
+      <div class="bv">
+        ${banks.map(b=>`<div class="bankline"><span class="bname">${escHtml(b.name)}</span>
+          <span class="bacct">${t('inv_bank_acct')}: <b>${escHtml(b.acct)}</b></span></div>`).join('')}
+      </div>
+    </div>` : '';
 
   return `
     <div class="hdr">
@@ -4259,12 +4467,17 @@ function invoiceReportBody(inv){
       ${field(t('inv_no'), inv.invoiceNo)}
       ${field(t('inv_bill_to'), inv.client)}
       ${field(t('inv_date'), dstr)}
+      ${field(t('inv_order_no'), inv.orderNo)}
+      ${field(t('inv_contract_no'), inv.contractNo)}
+      ${field(t('inv_serial_no'), inv.serialNo)}
       ${field(t('inv_due_date'), inv.dueDate)}
       ${field(t('inv_gen'), g ? g.name : t('inv_all_gens'))}
       ${field(t('inv_ref'), inv.ref)}
       ${field(t('inv_status'), invStatusLabel(inv.status))}
       ${field(t('inv_paid_date'), inv.paidDate)}
       ${field(t('bill_currency'), cur)}
+      ${field(t('inv_scope'), invScopeLabel(scope))}
+      ${field(t('inv_detail'), invDetailLabel(detail))}
     </div>
     <table class="itbl">
       <thead><tr>
@@ -4275,14 +4488,16 @@ function invoiceReportBody(inv){
     </table>
     <div class="totwrap">
       <table class="tottbl">
-        <tr><td>${t('inv_subtotal')}</td><td class="num">${moneyNum(tt.subtotal)} ${cur}</td></tr>
+        <tr><td>${tt.partial ? t('inv_doc_subtotal') : t('inv_subtotal')}</td><td class="num">${moneyNum(tt.subtotal)} ${cur}</td></tr>
         ${tt.discount?`<tr><td>${t('inv_discount')}</td><td class="num">− ${moneyNum(tt.discount)} ${cur}</td></tr>`:''}
         <tr class="grand"><td>${t('inv_total')}</td><td class="num">${moneyNum(tt.total)} ${cur}</td></tr>
-        ${tt.paid?`<tr><td>${t('inv_paid_amount')}</td><td class="num">${moneyNum(tt.paid)} ${cur}</td></tr>`:''}
-        ${tt.balance>0?`<tr class="bal"><td>${t('inv_balance')}</td><td class="num">${moneyNum(tt.balance)} ${cur}</td></tr>`:''}
+        ${(!tt.partial && tt.paid)?`<tr><td>${t('inv_paid_amount')}</td><td class="num">${moneyNum(tt.paid)} ${cur}</td></tr>`:''}
+        ${(!tt.partial && tt.balance>0)?`<tr class="bal"><td>${t('inv_balance')}</td><td class="num">${moneyNum(tt.balance)} ${cur}</td></tr>`:''}
       </table>
     </div>
+    ${tt.partial?`<div class="terms"><b>${t('inv_partial_note')}</b></div>`:''}
     ${inv.notes?`<div class="blk"><div class="bl">${t('inv_notes')}</div><div class="bv">${escHtml(inv.notes).replace(/\n/g,'<br>')}</div></div>`:''}
+    ${bankBlock}
     <div class="terms">${t('inv_terms')}<br>${t('inv_thanks')}</div>
     <div class="signrow">
       <div class="signbox">
@@ -4308,9 +4523,14 @@ const INVOICE_REPORT_CSS = FAULT_REPORT_CSS + `
     .tottbl tr.grand td{background:#1B2A4A;color:#fff;font-size:12.5px;font-weight:800;border:none;}
     .tottbl tr.bal td{color:#C0392B;font-weight:800;}
     .terms{margin-top:14px;font-size:10.5px;color:#6B7280;}
+    .bankblk{margin-top:12px;}
+    .bankline{display:flex;justify-content:space-between;gap:12px;font-size:11px;padding:3px 0;border-bottom:1px dotted #E4E7EC;}
+    .bankline:last-child{border-bottom:none;}
+    .bankline .bname{font-weight:700;color:#1B2A4A;}
+    .bankline .bacct{white-space:nowrap;direction:ltr;}
 `;
 
-function printInvoice(id){
+function printInvoice(id, scope, detail){
   const inv = STATE.invoices.find(x=>x.id===id);
   if(!inv) return;
   const bi = STATE.lang==='ar';
@@ -4323,7 +4543,7 @@ function printInvoice(id){
     .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
   </style></head><body>
     <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
-    ${invoiceReportBody(inv)}
+    ${invoiceReportBody(inv, scope, detail)}
     <script>setTimeout(function(){window.print();}, 400);<\/script>
   </body></html>`;
 
@@ -4332,7 +4552,7 @@ function printInvoice(id){
   w.document.open(); w.document.write(html); w.document.close();
 }
 
-function exportInvoiceWord(id){
+function exportInvoiceWord(id, scope, detail){
   const inv = STATE.invoices.find(x=>x.id===id);
   if(!inv) return;
   const bi = STATE.lang==='ar';
@@ -4344,14 +4564,15 @@ function exportInvoiceWord(id){
     div.Section1 { page: Section1; }
     ${INVOICE_REPORT_CSS}
   </style></head><body>
-    <div class="Section1">${invoiceReportBody(inv)}</div>
+    <div class="Section1">${invoiceReportBody(inv, scope, detail)}</div>
   </body></html>`;
 
   const blob = new Blob(['﻿', html], { type: 'application/msword' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `EnvironmSafe_${(inv.invoiceNo||'Invoice').replace(/[^a-zA-Z0-9_-]+/g,'_')}.doc`;
+  const sfx = [scope && scope!=='all' ? scope : '', detail==='summary' ? 'summary' : ''].filter(Boolean).join('_');
+  a.download = `EnvironmSafe_${(inv.invoiceNo||'Invoice').replace(/[^a-zA-Z0-9_-]+/g,'_')}${sfx?'_'+sfx:''}.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -4400,10 +4621,23 @@ function renderBillingSettings(){
     <h3>${t('bill_title')}</h3>
     <div class="hint">${t('bill_hint')}</div>
     <div class="grid2">
-      <div><label>${t('bill_service_rate')}</label>
+      <div><label>${t('bill_corrective_rate')}</label>
         <input type="number" step="0.01" min="0" id="bill-rate" value="${esc(serviceRate())}"></div>
-      <div><label>${t('bill_currency')}</label>
-        <input type="text" id="bill-currency" value="${esc(billingCurrency())}"></div>
+      <div><label>${t('bill_routine_rate')}</label>
+        <input type="number" step="0.01" min="0" id="bill-routine" value="${esc(routineRate())}"></div>
+    </div>
+    <label>${t('bill_currency')}</label>
+    <input type="text" id="bill-currency" value="${esc(billingCurrency())}">
+    <hr class="section-sep">
+    <h4 style="margin:0 0 4px;font-size:13px;color:var(--navy);">${t('inv_bank_title')}</h4>
+    <div class="hint">${t('bill_banks_hint')}</div>
+    <div class="grid2">
+      <div><label>${t('bill_bank1_name')}</label><input type="text" id="bill-bank1-name" value="${esc((STATE.billing||{}).bank1Name||'')}" placeholder="—"></div>
+      <div><label>${t('bill_bank1_acct')}</label><input type="text" id="bill-bank1-acct" value="${esc((STATE.billing||{}).bank1Acct||'')}" placeholder="—"></div>
+    </div>
+    <div class="grid2">
+      <div><label>${t('bill_bank2_name')}</label><input type="text" id="bill-bank2-name" value="${esc((STATE.billing||{}).bank2Name||'')}" placeholder="—"></div>
+      <div><label>${t('bill_bank2_acct')}</label><input type="text" id="bill-bank2-acct" value="${esc((STATE.billing||{}).bank2Acct||'')}" placeholder="—"></div>
     </div>
     <button class="btn btn-primary" id="bill-save" style="margin-top:12px;">${t('bill_save')}</button>
   </div>`;
@@ -4471,11 +4705,17 @@ function bindPriceListEditor(){
 
   const billBtn = document.getElementById('bill-save');
   if(billBtn) billBtn.addEventListener('click', async ()=>{
-    const rate = round2(parseFloat(document.getElementById('bill-rate').value)||0);
-    const currency = (document.getElementById('bill-currency').value||'').trim() || DEFAULT_CURRENCY;
+    const val = id => { const e = document.getElementById(id); return e ? String(e.value||'').trim() : ''; };
+    const rate = round2(parseFloat(val('bill-rate'))||0);
+    const routine = round2(parseFloat(val('bill-routine'))||0);
+    const currency = val('bill-currency') || DEFAULT_CURRENCY;
     billBtn.disabled = true;
     try{
-      await db.collection(SETTINGS_COLLECTION).doc(BILLING_DOC).set({ serviceRate: rate, currency }, { merge: true });
+      await db.collection(SETTINGS_COLLECTION).doc(BILLING_DOC).set({
+        serviceRate: rate, routineRate: routine, currency,
+        bank1Name: val('bill-bank1-name'), bank1Acct: val('bill-bank1-acct'),
+        bank2Name: val('bill-bank2-name'), bank2Acct: val('bill-bank2-acct')
+      }, { merge: true });
       showToast(t('bill_saved'));
     }catch(e){
       console.warn('billing settings save failed', e);

@@ -118,7 +118,8 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('FAO work excludes the UNHCR fault', work.every(w=>w.genId!=='u1'), JSON.stringify(work.map(w=>w.genId)));
   check('FAO work = 2 faults + 2 visits', work.length===4, 'got '+work.length);
   check('work list sorted newest first', work[0].date==='2026-08-13', work[0].date);
-  check('a service visit is worth one service fee', work.find(w=>w.sourceType==='service').amount===180);
+  check('a service visit is worth one routine fee', work.find(w=>w.sourceType==='service').amount===22,
+        work.find(w=>w.sourceType==='service').amount);
   check('nothing is invoiced yet', work.every(w=>!w.invoicedBy));
   check('no client filter returns everything', run(sb,'billableWorkItems(null).length')===5,
         run(sb,'billableWorkItems(null).length'));
@@ -148,7 +149,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
     STATE.invDraft.lines.push({kind:'good',sourceType:'manual',sourceId:'',desc:'Oil filter for stock',qty:4,unitPrice:12.5,total:50});
   `);
   check('draft now has fault + visit + stock line', run(sb,'STATE.invDraft.lines.length')===4);
-  check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===530,
+  check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===372,
         run(sb,'linesSubtotal(STATE.invDraft.lines)'));
 
   console.log('\n=== Invoice numbering ===');
@@ -291,6 +292,171 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('new billing labels are editable in the Labels panel',
         run(sb,`allLabelKeys().indexOf('inv_total')>=0 && categoryForLabelKey('inv_total')==='cat_billing'`)===true);
   check('price-list labels categorised too', run(sb,`categoryForLabelKey('pl_price')`)==='cat_billing');
+
+  console.log('\n=== Routine vs corrective rates ===');
+  run(sb,`STATE.billing={};`);
+  check('routine rate defaults to 22', run(sb,'routineRate()')===22, run(sb,'routineRate()'));
+  check('corrective rate still defaults to 180', run(sb,'serviceRate()')===180);
+  run(sb,`STATE.billing={serviceRate:180, routineRate:23};`);
+  check('routine rate reads the settings doc', run(sb,'routineRate()')===23);
+  let visitItem = run(sb,`billableWorkItems('FAO').find(w=>w.sourceType==='service')`);
+  check('a routine visit is billed at the routine rate, not 180', visitItem.amount===23, visitItem.amount);
+  let faultItem = run(sb,`billableWorkItems('FAO').find(w=>w.sourceId==='c1')`);
+  check('a fault is still billed at the corrective rate', faultItem.fee===180, faultItem.fee);
+  run(sb,`STATE.billing={serviceRate:180, routineRate:22};`);
+  check('bad routine rate falls back to the default',
+        run(sb,`(function(){STATE.billing={routineRate:'x'};var r=routineRate();STATE.billing={serviceRate:180,routineRate:22};return r;})()`)===22);
+
+  console.log('\n=== Quantities are editable ===');
+  run(sb,`__l={kind:'good',desc:'Oil filter',qty:1,unitPrice:18,total:18};
+          __l.qty=25; __l.total=lineTotal(__l);`);
+  check('changing qty recomputes the line total', run(sb,'__l.total')===450, run(sb,'__l.total'));
+  run(sb,`__l.unitPrice=17.5; __l.total=lineTotal(__l);`);
+  check('changing unit price recomputes the line total', run(sb,'__l.total')===437.5);
+  const ed = run(sb,`renderLineEditor([{kind:'good',desc:'X',qty:2,unitPrice:5}],'inv',{editable:true})`);
+  check('editable editor renders qty inputs', ed.indexOf('data-lineqty="inv:0"')>=0);
+  check('editable editor renders price inputs', ed.indexOf('data-lineprice="inv:0"')>=0);
+  const ro = run(sb,`renderLineEditor([{kind:'good',desc:'X',qty:2,unitPrice:5}],'ro',{readOnly:true})`);
+  check('read-only editor has no inputs and no remove button',
+        ro.indexOf('data-lineqty')<0 && ro.indexOf('data-linerm')<0);
+
+  console.log('\n=== Issuing services and goods separately ===');
+  run(sb,`__doc={lines:[
+    {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Repair',qty:1,unitPrice:180},
+    {kind:'service',sourceType:'service',genId:'g1',genName:'GEN-01',desc:'Routine',qty:1,unitPrice:22},
+    {kind:'good',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Battery',qty:1,unitPrice:120},
+    {kind:'good',sourceType:'manual',desc:'Oil filter',qty:4,unitPrice:18}
+  ],discount:0,paidAmount:0,status:'sent'};`);
+  check('scope all keeps every line', run(sb,`scopeLines(__doc.lines,'all').length`)===4);
+  check('services only', run(sb,`scopeLines(__doc.lines,'services').length`)===2);
+  check('goods only', run(sb,`scopeLines(__doc.lines,'goods').length`)===2);
+  check('services-only subtotal', run(sb,`linesSubtotal(scopeLines(__doc.lines,'services'))`)===202);
+  check('goods-only subtotal', run(sb,`linesSubtotal(scopeLines(__doc.lines,'goods'))`)===192);
+  check('the two scopes add back up to the whole invoice',
+        run(sb,`round2(linesSubtotal(scopeLines(__doc.lines,'services'))+linesSubtotal(scopeLines(__doc.lines,'goods')))`)
+        === run(sb,`linesSubtotal(__doc.lines)`));
+  let dt = run(sb,`documentTotals(__doc,'services','detailed')`);
+  check('a partial issue is flagged as partial', dt.partial===true);
+  check('a partial issue prints only its own subtotal', dt.total===202);
+  check('a partial issue does not claim the payment', dt.paid===0);
+  dt = run(sb,`documentTotals(__doc,'all','detailed')`);
+  check('a full issue is not partial and matches the stored total', dt.partial===false && dt.total===394, dt.total);
+
+  console.log('\n=== Summary invoice: 2 lines per genset ===');
+  run(sb,`__sum={lines:[
+    {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Repair Cor-1',ref:'Cor-1',qty:1,unitPrice:180},
+    {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Repair Cor-2',ref:'Cor-2',qty:1,unitPrice:180},
+    {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Repair Cor-3',ref:'Cor-3',qty:1,unitPrice:180},
+    {kind:'service',sourceType:'service',genId:'g1',genName:'GEN-01',desc:'Routine A',qty:1,unitPrice:22},
+    {kind:'service',sourceType:'service',genId:'g1',genName:'GEN-01',desc:'Routine B',qty:1,unitPrice:22},
+    {kind:'service',sourceType:'fault',genId:'g2',genName:'GEN-02',desc:'Repair Cor-9',qty:1,unitPrice:180},
+    {kind:'service',sourceType:'service',genId:'g2',genName:'GEN-02',desc:'Routine C',qty:1,unitPrice:22}
+  ],discount:0,paidAmount:0,status:'sent'};`);
+  let sumLines = run(sb,`summariseLines(__sum.lines)`);
+  check('two gensets x (fault + routine) = 4 summary lines', sumLines.length===4, 'got '+sumLines.length);
+  const g1f = sumLines.find(l=>l.genId==='g1' && l.sourceType==='fault');
+  const g1r = sumLines.find(l=>l.genId==='g1' && l.sourceType==='service');
+  check('GEN-01 corrective line carries qty 3', g1f.qty===3, g1f.qty);
+  check('GEN-01 corrective line totals 540', g1f.total===540, g1f.total);
+  check('GEN-01 routine line carries qty 2', g1r.qty===2);
+  check('GEN-01 routine line totals 44', g1r.total===44);
+  check('summary line names the generator', g1f.desc.indexOf('GEN-01')>=0, g1f.desc);
+  check('summary line says which kind of visit', g1r.desc.indexOf('Routine')>=0, g1r.desc);
+  check('summary drops the per-fault references', sumLines.every(l=>!l.ref));
+  check('summary total equals the detailed total',
+        run(sb,`linesSubtotal(summariseLines(__sum.lines))`)===run(sb,`linesSubtotal(__sum.lines)`),
+        run(sb,`linesSubtotal(summariseLines(__sum.lines))`)+' vs '+run(sb,`linesSubtotal(__sum.lines)`));
+  run(sb,`__mixed=[{kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',qty:1,unitPrice:180},
+                  {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',qty:1,unitPrice:150}];`);
+  check('two different fault rates stay on separate summary lines',
+        run(sb,`summariseLines(__mixed).length`)===2);
+  check('...and the money is still exact',
+        run(sb,`linesSubtotal(summariseLines(__mixed))`)===330);
+  check('goods are summarised by item, quantities added',
+        run(sb,`summariseLines([{kind:'good',desc:'Oil filter',qty:4,unitPrice:18},{kind:'good',desc:'Oil filter',qty:6,unitPrice:18}]).length`)===1);
+  check('...with the combined quantity',
+        run(sb,`summariseLines([{kind:'good',desc:'Oil filter',qty:4,unitPrice:18},{kind:'good',desc:'Oil filter',qty:6,unitPrice:18}])[0].qty`)===10);
+  check('summary services come before summary goods',
+        run(sb,`summariseLines([{kind:'good',desc:'X',qty:1,unitPrice:1},{kind:'service',sourceType:'fault',genName:'A',qty:1,unitPrice:1}])[0].kind`)==='service');
+  check('summary + goods-only scope combine correctly',
+        run(sb,`documentLines(__doc,'goods','summary').every(l=>l.kind!=='service')`)===true);
+
+  console.log('\n=== Invoice header fields + bank details ===');
+  run(sb,`STATE.billing={serviceRate:180,routineRate:22,currency:'USD',
+      bank1Name:'Alkuraimi Islamic Microfinance Bank',bank1Acct:'3108401426',
+      bank2Name:'AL Qutaibi Bank',bank2Acct:'436323641'};`);
+  check('both banks are listed', run(sb,'bankAccounts().length')===2);
+  check('a blank second bank is dropped',
+        run(sb,`(function(){var b=STATE.billing;STATE.billing={bank1Name:'X',bank1Acct:'1'};var n=bankAccounts().length;STATE.billing=b;return n;})()`)===1);
+  run(sb,`STATE.invoices=[{id:'i9',invoiceNo:'INV-1009',invoiceSeq:1009,client:'FAO',genId:'g1',date:'2026-08-14',
+    orderNo:'PO-4471',contractNo:'FRA/CO/YE/2026/11',serialNo:'SN-002',dueDate:'2026-09-13',
+    status:'sent',paidAmount:0,discount:0,
+    lines:[{kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',ref:'Cor-818',desc:'Repair',qty:1,unitPrice:180},
+           {kind:'good',sourceType:'manual',desc:'Oil filter',qty:4,unitPrice:18}]}];`);
+  let body = run(sb,`invoiceReportBody(STATE.invoices[0],'all','detailed')`);
+  check('document shows the order number', body.indexOf('PO-4471')>=0);
+  check('document shows the FRA/contract number', body.indexOf('FRA/CO/YE/2026/11')>=0);
+  check('document shows the serial number', body.indexOf('SN-002')>=0);
+  check('document shows the invoice date', body.indexOf('2026')>=0);
+  check('document shows the Alkuraimi account', body.indexOf('3108401426')>=0);
+  check('document shows the Al Qutaibi account', body.indexOf('436323641')>=0);
+  check('document names both banks',
+        body.indexOf('Alkuraimi')>=0 && body.indexOf('Qutaibi')>=0);
+  let sBody = run(sb,`invoiceReportBody(STATE.invoices[0],'services','detailed')`);
+  check('services-only document omits the goods line', sBody.indexOf('Oil filter')<0);
+  check('services-only document keeps the service line', sBody.indexOf('Repair')>=0);
+  check('services-only document is marked as a partial issue',
+        sBody.indexOf('partial issue')>=0, 'expected the partial-issue note');
+  let gBody = run(sb,`invoiceReportBody(STATE.invoices[0],'goods','detailed')`);
+  check('goods-only document omits the service line', gBody.indexOf('Repair')<0);
+  check('goods-only document keeps the goods line', gBody.indexOf('Oil filter')>=0);
+  let sumBody = run(sb,`invoiceReportBody(STATE.invoices[0],'services','summary')`);
+  check('summary document hides the fault reference', sumBody.indexOf('Cor-818')<0);
+  check('summary document shows the grouped visit line', sumBody.indexOf('Corrective maintenance visits')>=0);
+  check('an unknown scope falls back to the full document',
+        run(sb,`invoiceReportBody(STATE.invoices[0],'nonsense','detailed')`).indexOf('Oil filter')>=0);
+
+  console.log('\n=== Existing records keep working (nothing lost) ===');
+  run(sb,`STATE.billing={serviceRate:180,routineRate:22,currency:'USD'};
+          __old={id:'old1',genId:'g1',faultId:'Cor-800',date:'2026-05-01',status:'closed',
+                 description:'Old fault saved before billing existed',partsUsed:'Clamp, hose'};`);
+  check('a fault with no serviceFee field still gets the default rate', run(sb,'faultServiceFee(__old)')===180);
+  check('a fault with no partsLines returns an empty list', run(sb,'faultPartsLines(__old).length')===0);
+  check('its billable total is just the fee', run(sb,'faultBillableTotal(__old)')===180);
+  check('its free-text partsUsed is untouched', run(sb,'__old.partsUsed')==='Clamp, hose');
+  check('the old fault still renders on a card', run(sb,'renderFaultBillingSummary(__old)').indexOf('180.00')>=0);
+  check('the old fault still renders its official report',
+        run(sb,'faultReportBody(__old)').indexOf('Cor-800')>=0);
+  run(sb,`__oldInv={id:'oi',invoiceNo:'INV-999',invoiceSeq:999,client:'FAO',date:'2026-06-01',status:'sent',
+            lines:[{kind:'service',sourceType:'fault',sourceId:'x',desc:'Old line',qty:1,unitPrice:180}]};`);
+  check('an invoice line with no genId still summarises', run(sb,'summariseLines(__oldInv.lines).length')===1);
+  check('an invoice with no discount/paid fields totals correctly',
+        run(sb,'invoiceTotals(__oldInv).total')===180 && run(sb,'invoiceTotals(__oldInv).balance')===180);
+  check('an old invoice still prints', run(sb,`invoiceReportBody(__oldInv,'all','detailed')`).indexOf('INV-999')>=0);
+  check('a fault with no photos/customFields still reports',
+        run(sb,'faultReportBody({genId:"g1",faultId:"Cor-801"})').indexOf('Cor-801')>=0);
+
+  console.log('\n=== New fields survive the backup ===');
+  run(sb,`__sheets.length=0;`);
+  run(sb,'exportFullBackup()');
+  const ih = run(sb,`__sheets.find(s=>s.name==='Invoices').sheet.rows[0]`);
+  check('backup Invoices sheet has orderNo', ih.indexOf('orderNo')>=0, JSON.stringify(ih));
+  check('backup Invoices sheet has contractNo', ih.indexOf('contractNo')>=0);
+  check('backup Invoices sheet has serialNo', ih.indexOf('serialNo')>=0);
+  const lh = run(sb,`__sheets.find(s=>s.name==='InvoiceLines').sheet.rows[0]`);
+  check('backup InvoiceLines sheet records the generator', lh.indexOf('generator')>=0, JSON.stringify(lh));
+  check('backup still has all the original sheets',
+        ['Generators','Readings','ServiceHistory','Faults','MaintBaselines']
+          .every(n=>run(sb,'__sheets.map(s=>s.name)').indexOf(n)>=0));
+
+  console.log('\n=== New labels are translated + editable ===');
+  check('every scope has both languages',
+        run(sb,`INVOICE_SCOPES.every(v=>!!I18N.en['inv_scope_'+v] && !!I18N.ar['inv_scope_'+v])`)===true);
+  check('every detail level has both languages',
+        run(sb,`INVOICE_DETAILS.every(v=>!!I18N.en['inv_detail_'+v] && !!I18N.ar['inv_detail_'+v])`)===true);
+  check('bank + rate labels exist in both languages',
+        run(sb,`['bill_routine_rate','bill_corrective_rate','bill_bank1_name','inv_order_no','inv_contract_no','inv_serial_no']
+                 .every(k=>!!I18N.en[k] && !!I18N.ar[k])`)===true);
 
   console.log('\n===============================');
   console.log('TOTAL: '+pass+' passed, '+fail+' failed');

@@ -41,11 +41,11 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,`STATE.lang='en';`);
 
   console.log('\n=== Label overrides: t() precedence ===');
-  check('no override falls back to built-in default', run(sb,`t('tab_corr')`)==='Faults');
+  check('no override falls back to built-in default', run(sb,`t('tab_corr')`)==='Corrective');
   run(sb,`STATE.labelOverrides = { tab_corr: { en: 'Breakdowns' } };`);
   check('override wins over built-in default', run(sb,`t('tab_corr')`)==='Breakdowns');
   run(sb,`STATE.labelOverrides = { tab_corr: { en: '' } };`);
-  check('blank override falls back to default (not empty string)', run(sb,`t('tab_corr')`)==='Faults');
+  check('blank override falls back to default (not empty string)', run(sb,`t('tab_corr')`)==='Corrective');
   run(sb,`STATE.labelOverrides = {};`);
   check('unknown key falls back to the key itself', run(sb,`t('not_a_real_key')`)==='not_a_real_key');
 

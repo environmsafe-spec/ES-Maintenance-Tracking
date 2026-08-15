@@ -316,7 +316,7 @@
   <button class="tab-btn" data-tab="history"><span class="ic">🕓</span><span data-tabkey="tab_history">History</span></button>
   <button class="tab-btn" data-tab="reports"><span class="ic">📄</span><span data-tabkey="tab_reports">Reports</span></button>
   <button class="tab-btn" data-tab="maintenance"><span class="ic">🛠️</span><span data-tabkey="tab_maint">Service</span></button>
-  <button class="tab-btn" data-tab="corrective"><span class="ic">⚠️</span><span data-tabkey="tab_corr">Faults</span></button>
+  <button class="tab-btn" data-tab="corrective"><span class="ic">⚠️</span><span data-tabkey="tab_corr">Corrective</span></button>
   <button class="tab-btn" data-tab="invoices"><span class="ic">🧾</span><span data-tabkey="tab_invoices">Invoices</span></button>
   <button class="tab-btn" data-tab="dashboard"><span class="ic">📊</span><span data-tabkey="tab_dashboard">Dashboard</span></button>
   <button class="tab-btn" data-tab="generators"><span class="ic">⚙️</span><span data-tabkey="tab_setup">Setup</span></button>
@@ -511,11 +511,11 @@ const RANGES = {
 const I18N = {
   ar: {
     brandSub:'الهندسة والتجارة والخدمات المحدودة',
-    tab_corr:'الأعطال',
-    title_corr:'الصيانة التصحيحية', sub_corr:'تسجيل الأعطال والإصلاحات لكل مولّد',
-    corr_new:'+ تسجيل عطل / إصلاح', corr_list:'السجل', corr_none:'لا توجد سجلات بعد',
+    tab_corr:'التصحيحية',
+    title_corr:'الصيانة التصحيحية', sub_corr:'تسجيل الصيانة التصحيحية والإصلاحات لكل مولّد',
+    corr_new:'+ تسجيل صيانة تصحيحية / إصلاح', corr_list:'السجل', corr_none:'لا توجد سجلات بعد',
     corr_date:'التاريخ', corr_gen:'المولّد', corr_type:'النوع', corr_sev:'الخطورة', corr_status:'الحالة',
-    corr_hours:'ساعات التشغيل عند الحدث', corr_desc:'وصف العطل', corr_action:'الإجراء المتخذ',
+    corr_hours:'ساعات التشغيل عند الحدث', corr_desc:'وصف الصيانة التصحيحية', corr_action:'الإجراء المتخذ',
     corr_parts:'قطع الغيار المستخدمة', corr_downtime:'مدة التوقف (ساعة)', corr_by:'بواسطة',
     corr_cost:'التكلفة', corr_closed:'تاريخ الإغلاق',
     corr_t_failure:'عطل', corr_t_breakdown:'توقف مفاجئ', corr_t_repair:'إصلاح',
@@ -523,22 +523,22 @@ const I18N = {
     corr_s_low:'منخفضة', corr_s_medium:'متوسطة', corr_s_high:'عالية', corr_s_critical:'حرجة',
     corr_st_open:'مفتوح', corr_st_in_progress:'قيد التنفيذ', corr_st_closed:'مغلق',
     corr_save:'حفظ السجل', corr_saved:'✅ تم حفظ السجل', corr_fail:'⚠️ تعذّر الحفظ — تحقق من الاتصال',
-    corr_need_desc:'⚠️ أدخل وصف العطل', corr_need_gen:'⚠️ اختر المولّد',
+    corr_need_desc:'⚠️ أدخل وصف الصيانة التصحيحية', corr_need_gen:'⚠️ اختر المولّد',
     corr_delete:'حذف', corr_del_confirm:'حذف هذا السجل نهائيًا؟',
     corr_filter_all:'الكل', corr_filter_open:'المفتوحة', corr_edit_status:'تغيير الحالة',
-    corr_open_count:'{n} عطل مفتوح',
+    corr_open_count:'{n} صيانة تصحيحية مفتوحة',
     corr_edit:'✎ تعديل', corr_edit_title:'تعديل السجل', corr_update:'حفظ التعديلات', corr_updated:'✅ تم تحديث السجل',
     corr_cancel:'إلغاء',
     corr_recommend:'التوصيات',
-    corr_print:'🖨️ طباعة PDF', corr_word:'📄 Word', corr_report_title:'تقرير عطل / صيانة تصحيحية',
+    corr_print:'🖨️ طباعة PDF', corr_word:'📄 Word', corr_report_title:'تقرير صيانة تصحيحية',
     corr_report_no:'رقم التقرير', corr_sign_eng:'مهندس EnvironmSafe',
     corr_sign_client:'مشرف العميل', sign_name:'الاسم', sign_signature:'التوقيع', sign_date:'التاريخ',
     corr_word_downloaded:'✅ تم تنزيل ملف Word',
-    corr_fault_id:'رقم العطل', corr_short_desc:'وصف مختصر',
-    corr_backfill_notice:'{n} عطل قديم بدون رقم عطل بعد.', corr_backfill_btn:'تعيين أرقام الأعطال الآن',
-    corr_backfill_done:'✅ تم تعيين {n} رقم عطل',
-    corr_causes:'أسباب العطل', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
-    corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل عطل',
+    corr_fault_id:'رقم التصحيحية', corr_short_desc:'وصف مختصر',
+    corr_backfill_notice:'{n} سجل تصحيحي قديم بدون رقم بعد.', corr_backfill_btn:'تعيين الأرقام التصحيحية الآن',
+    corr_backfill_done:'✅ تم تعيين {n} رقم تصحيحي',
+    corr_causes:'الأسباب', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
+    corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل سجل تصحيحي',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
     corr_billing:'البنود القابلة للفوترة',
     corr_service_fee:'أجرة الخدمة/الزيارة',
@@ -560,7 +560,7 @@ const I18N = {
     inv_kind_service:'خدمة', inv_kind_good:'صنف',
     inv_subtotal:'المجموع الفرعي', inv_discount:'الخصم', inv_total:'الإجمالي المستحق',
     inv_paid_amount:'المبلغ المدفوع', inv_balance:'الرصيد المتبقي', inv_paid_date:'تاريخ السداد',
-    inv_pick_work:'الأعمال غير المفوترة', inv_pick_hint:'اختر الأعطال والصيانات المراد فوترتها في هذه الفاتورة.',
+    inv_pick_work:'الأعمال غير المفوترة', inv_pick_hint:'اختر الصيانة التصحيحية والدورية المراد فوترتها في هذه الفاتورة.',
     inv_pick_none:'لا توجد أعمال غير مفوترة لهذا العميل.',
     inv_already:'مفوترة سابقًا', inv_show_invoiced:'إظهار الأعمال المفوترة',
     inv_add_goods:'إضافة أصناف', inv_from_list:'من قائمة الأسعار', inv_custom_item:'صنف خارج القائمة',
@@ -581,8 +581,8 @@ const I18N = {
     inv_overdue_tag:'متأخرة السداد',
     inv_mark_status:'تغيير الحالة', inv_record_payment:'تسجيل دفعة',
     inv_payment_prompt:'المبلغ المدفوع (بالدولار):',
-    inv_src_fault:'عطل', inv_src_service:'صيانة', inv_src_manual:'إضافة يدوية',
-    inv_line_from_fault:'خدمة إصلاح عطل', inv_line_from_service:'خدمة صيانة دورية',
+    inv_src_fault:'تصحيحية', inv_src_service:'صيانة', inv_src_manual:'إضافة يدوية',
+    inv_line_from_fault:'خدمة صيانة تصحيحية', inv_line_from_service:'خدمة صيانة دورية',
     inv_stock_hint:'يمكنك إضافة أي صنف حتى لو لم يُستخدم في إصلاح — مثل توريد قطع للمخزون.',
 
     pl_title:'قائمة أسعار الأصناف', pl_hint:'الأصناف وأسعارها. يمكن دائمًا إضافة صنف خارج القائمة عند الفوترة.',
@@ -595,7 +595,7 @@ const I18N = {
     pl_price_prompt:'السعر الجديد بالدولار:', pl_name_prompt:'اسم الصنف:',
     pl_unit_each:'قطعة',
 
-    bill_title:'إعدادات الفوترة', bill_hint:'أجرة الخدمة الافتراضية لكل عطل أو صيانة، والعملة.',
+    bill_title:'إعدادات الفوترة', bill_hint:'أجرة الخدمة الافتراضية لكل صيانة تصحيحية أو دورية، والعملة.',
     bill_service_rate:'أجرة الخدمة الواحدة', bill_currency:'العملة', bill_save:'حفظ الإعدادات',
     bill_saved:'✅ تم حفظ إعدادات الفوترة',
 
@@ -603,14 +603,14 @@ const I18N = {
     inv_issue_opts:'خيارات الإصدار',
     inv_scope:'المحتوى', inv_scope_all:'خدمات وأصناف', inv_scope_services:'الخدمات فقط', inv_scope_goods:'الأصناف فقط',
     inv_detail:'التفصيل', inv_detail_detailed:'تفصيلي', inv_detail_summary:'إجمالي',
-    inv_sum_corrective:'زيارات صيانة تصحيحية (أعطال)',
+    inv_sum_corrective:'زيارات صيانة تصحيحية',
     inv_sum_routine:'زيارات صيانة دورية (250 ساعة)',
     inv_doc_subtotal:'إجمالي هذا الإصدار',
     inv_partial_note:'هذا إصدار جزئي من الفاتورة ويشمل البنود المذكورة أعلاه فقط.',
     inv_bank_title:'بيانات الحساب البنكي للتحويل',
     inv_bank_acct:'رقم الحساب',
     bill_routine_rate:'أجرة الزيارة الدورية (250 ساعة)',
-    bill_corrective_rate:'أجرة زيارة العطل (تصحيحية)',
+    bill_corrective_rate:'أجرة الزيارة التصحيحية',
     bill_bank1_name:'اسم البنك الأول', bill_bank1_acct:'رقم الحساب الأول',
     bill_bank2_name:'اسم البنك الثاني', bill_bank2_acct:'رقم الحساب الثاني',
     bill_banks_hint:'تظهر هذه البيانات في أسفل كل فاتورة مطبوعة.',
@@ -620,11 +620,11 @@ const I18N = {
     labels_search_ph:'بحث عن نص...', labels_save:'💾 حفظ كل التعديلات', labels_saved:'✅ تم حفظ التعديلات',
     labels_reset:'إعادة الكل للافتراضي', labels_reset_confirm:'إعادة كل النصوص إلى الافتراضي؟', labels_reset_done:'✅ تمت إعادة الضبط',
     labels_ar:'عربي', labels_en:'إنجليزي',
-    cat_tabs:'التبويبات', cat_tabheaders:'عناوين التبويبات', cat_faults:'تبويب الأعطال', cat_billing:'الفوترة والأسعار',
+    cat_tabs:'التبويبات', cat_tabheaders:'عناوين التبويبات', cat_faults:'تبويب الصيانة التصحيحية', cat_billing:'الفوترة والأسعار',
     cat_maint:'تبويب الصيانة', cat_reports:'التقارير', cat_readings:'تبويب القراءات والسجل',
     cat_warnerr:'التنبيهات والأخطاء', cat_general:'عام',
     customfields_title:'حقول إضافية مخصّصة', customfields_hint:'أضف حقولًا جديدة إلى أي نموذج في التطبيق.',
-    cf_section:'يُضاف إلى', cf_section_reading:'قراءة جديدة', cf_section_corrective:'الأعطال',
+    cf_section:'يُضاف إلى', cf_section_reading:'قراءة جديدة', cf_section_corrective:'الصيانة التصحيحية',
     cf_section_service:'تسجيل صيانة', cf_section_generator:'إضافة مولّد',
     cf_label_ar:'التسمية (عربي)', cf_label_en:'التسمية (إنجليزي)', cf_type:'نوع الحقل',
     cf_type_text:'نص قصير', cf_type_textarea:'نص طويل', cf_type_number:'رقم', cf_type_date:'تاريخ', cf_type_select:'قائمة اختيار',
@@ -632,14 +632,14 @@ const I18N = {
     cf_deactivate:'إلغاء تفعيل', cf_activate:'تفعيل', cf_delete:'حذف نهائي', cf_delete_confirm:'حذف هذا الحقل نهائيًا؟ (لن يُحذف من السجلات القديمة)',
     cf_need_label:'⚠️ أدخل تسمية للحقل بلغة واحدة على الأقل', cf_none:'لا توجد حقول مخصّصة بعد', cf_inactive:'(معطّل)',
     rep_type:'نوع التقرير', rep_t_readings:'قراءات', rep_t_maint:'الصيانة الدورية',
-    rep_t_corr:'الأعطال والإصلاحات', rep_t_fleet:'ملخص الأسطول',
+    rep_t_corr:'الصيانة التصحيحية والإصلاحات', rep_t_fleet:'ملخص الأسطول',
     rep_t_svclog:'سجل الصيانات المنفّذة', svc_kind:'النوع', svc_interval:'الفترة', svc_hours_at:'الساعات عند الصيانة',
     svc_backfilled:'مُدخل يدويًا', svc_none:'لا توجد صيانات مسجّلة في هذه الفترة',
     svc_recent:'آخر الصيانات المنفّذة', svc_delete_confirm:'حذف هذا السجل من تاريخ الصيانة؟',
     svc_deleted:'✅ تم الحذف', svc_kind_time:'حسب الوقت', svc_kind_hours:'حسب الساعات',
     rep_backup:'⬇ نسخة احتياطية كاملة (Excel)', rep_backup_done:'✅ تم إنشاء النسخة الاحتياطية',
     rep_all_gens:'كل المولّدات', rep_last_reading:'آخر قراءة', rep_readings_n:'عدد القراءات',
-    rep_overdue_svc:'صيانة متأخرة', rep_soon_svc:'صيانة قريبة', rep_open_faults:'أعطال مفتوحة', rep_total_faults:'إجمالي الأعطال',
+    rep_overdue_svc:'صيانة متأخرة', rep_soon_svc:'صيانة قريبة', rep_open_faults:'تصحيحية مفتوحة', rep_total_faults:'إجمالي التصحيحية',
     tab_new:'قراءة', tab_history:'السجل', tab_reports:'التقارير', tab_maint:'الصيانة', tab_dashboard:'لوحة', tab_setup:'الإعداد',
     title_maint:'الصيانة', sub_maint:'صيانة دورية حسب الوقت وساعات التشغيل',
     maint_time:'حسب الوقت', maint_hours:'حسب ساعات التشغيل',
@@ -725,11 +725,11 @@ const I18N = {
   },
   en: {
     brandSub:'Engineering, Trading & Services Ltd.',
-    tab_corr:'Faults',
-    title_corr:'Corrective Maintenance', sub_corr:'Record faults and repairs per generator',
-    corr_new:'+ Log fault / repair', corr_list:'Records', corr_none:'No records yet',
+    tab_corr:'Corrective',
+    title_corr:'Corrective Maintenance', sub_corr:'Record correctives and repairs per generator',
+    corr_new:'+ Log corrective / repair', corr_list:'Records', corr_none:'No records yet',
     corr_date:'Date', corr_gen:'Generator', corr_type:'Type', corr_sev:'Severity', corr_status:'Status',
-    corr_hours:'Running hours at event', corr_desc:'Fault description', corr_action:'Action taken',
+    corr_hours:'Running hours at event', corr_desc:'Corrective description', corr_action:'Action taken',
     corr_parts:'Parts used', corr_downtime:'Downtime (hrs)', corr_by:'Reported by',
     corr_cost:'Cost', corr_closed:'Closed date',
     corr_t_failure:'Failure', corr_t_breakdown:'Breakdown', corr_t_repair:'Repair',
@@ -737,22 +737,22 @@ const I18N = {
     corr_s_low:'Low', corr_s_medium:'Medium', corr_s_high:'High', corr_s_critical:'Critical',
     corr_st_open:'Open', corr_st_in_progress:'In progress', corr_st_closed:'Closed',
     corr_save:'Save record', corr_saved:'✅ Record saved', corr_fail:'⚠️ Could not save — check connection',
-    corr_need_desc:'⚠️ Enter a fault description', corr_need_gen:'⚠️ Select a generator',
+    corr_need_desc:'⚠️ Enter a corrective description', corr_need_gen:'⚠️ Select a generator',
     corr_delete:'Delete', corr_del_confirm:'Delete this record permanently?',
     corr_filter_all:'All', corr_filter_open:'Open only', corr_edit_status:'Change status',
-    corr_open_count:'{n} open fault(s)',
+    corr_open_count:'{n} open corrective(s)',
     corr_edit:'✎ Edit', corr_edit_title:'Edit record', corr_update:'Save changes', corr_updated:'✅ Record updated',
     corr_cancel:'Cancel',
     corr_recommend:'Recommendations',
-    corr_print:'🖨️ Print PDF', corr_word:'📄 Word', corr_report_title:'Fault / Corrective Maintenance Report',
+    corr_print:'🖨️ Print PDF', corr_word:'📄 Word', corr_report_title:'Corrective Maintenance Report',
     corr_report_no:'Report No.', corr_sign_eng:'EnvironmSafe Engineer',
     corr_sign_client:'Client Supervisor', sign_name:'Name', sign_signature:'Signature', sign_date:'Date',
     corr_word_downloaded:'✅ Word file downloaded',
-    corr_fault_id:'Fault ID', corr_short_desc:'Short description',
-    corr_backfill_notice:'{n} old fault(s) don’t have a Fault ID yet.', corr_backfill_btn:'Assign Fault IDs now',
-    corr_backfill_done:'✅ Assigned {n} Fault ID(s)',
-    corr_causes:'Causes of the fault', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
-    corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per fault',
+    corr_fault_id:'Corrective ID', corr_short_desc:'Short description',
+    corr_backfill_notice:'{n} old corrective(s) don’t have a Corrective ID yet.', corr_backfill_btn:'Assign Corrective IDs now',
+    corr_backfill_done:'✅ Assigned {n} Corrective ID(s)',
+    corr_causes:'Causes', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
+    corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per corrective',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
     corr_billing:'Billable items',
     corr_service_fee:'Service / call-out fee',
@@ -774,7 +774,7 @@ const I18N = {
     inv_kind_service:'Service', inv_kind_good:'Goods',
     inv_subtotal:'Subtotal', inv_discount:'Discount', inv_total:'Total due',
     inv_paid_amount:'Amount paid', inv_balance:'Balance', inv_paid_date:'Payment date',
-    inv_pick_work:'Un-invoiced work', inv_pick_hint:'Tick the faults and services to bill on this invoice.',
+    inv_pick_work:'Un-invoiced work', inv_pick_hint:'Tick the correctives and services to bill on this invoice.',
     inv_pick_none:'No un-invoiced work for this client.',
     inv_already:'Already invoiced', inv_show_invoiced:'Show already-invoiced work',
     inv_add_goods:'Add goods', inv_from_list:'From price list', inv_custom_item:'Item not on the list',
@@ -795,7 +795,7 @@ const I18N = {
     inv_overdue_tag:'Payment overdue',
     inv_mark_status:'Change status', inv_record_payment:'Record payment',
     inv_payment_prompt:'Amount paid (USD):',
-    inv_src_fault:'Fault', inv_src_service:'Service', inv_src_manual:'Added manually',
+    inv_src_fault:'Corrective', inv_src_service:'Service', inv_src_manual:'Added manually',
     inv_line_from_fault:'Corrective repair service', inv_line_from_service:'Scheduled maintenance service',
     inv_stock_hint:'You can add any item even if it was not used on a repair — for example parts supplied to stock.',
 
@@ -809,7 +809,7 @@ const I18N = {
     pl_price_prompt:'New price in USD:', pl_name_prompt:'Item name:',
     pl_unit_each:'each',
 
-    bill_title:'Billing settings', bill_hint:'Default service fee charged for each fault or service, and the currency.',
+    bill_title:'Billing settings', bill_hint:'Default service fee charged for each corrective or routine service, and the currency.',
     bill_service_rate:'Service fee per job', bill_currency:'Currency', bill_save:'Save settings',
     bill_saved:'✅ Billing settings saved',
 
@@ -817,14 +817,14 @@ const I18N = {
     inv_issue_opts:'Issue options',
     inv_scope:'Contents', inv_scope_all:'Services + goods', inv_scope_services:'Services only', inv_scope_goods:'Goods only',
     inv_detail:'Detail', inv_detail_detailed:'Detailed', inv_detail_summary:'Summary',
-    inv_sum_corrective:'Corrective maintenance visits (faults)',
+    inv_sum_corrective:'Corrective maintenance visits',
     inv_sum_routine:'Routine maintenance visits (250 h)',
     inv_doc_subtotal:'Total for this issue',
     inv_partial_note:'This is a partial issue of the invoice and covers only the lines listed above.',
     inv_bank_title:'Bank account details for payment',
     inv_bank_acct:'Account No.',
     bill_routine_rate:'Routine visit fee (250 h)',
-    bill_corrective_rate:'Corrective (fault) visit fee',
+    bill_corrective_rate:'Corrective visit fee',
     bill_bank1_name:'Bank 1 name', bill_bank1_acct:'Bank 1 account no.',
     bill_bank2_name:'Bank 2 name', bill_bank2_acct:'Bank 2 account no.',
     bill_banks_hint:'These appear at the bottom of every printed invoice.',
@@ -834,11 +834,11 @@ const I18N = {
     labels_search_ph:'Search text...', labels_save:'💾 Save all changes', labels_saved:'✅ Changes saved',
     labels_reset:'Reset all to default', labels_reset_confirm:'Reset all labels to their default text?', labels_reset_done:'✅ Reset done',
     labels_ar:'Arabic', labels_en:'English',
-    cat_tabs:'Tabs', cat_tabheaders:'Tab headers', cat_faults:'Faults tab', cat_billing:'Billing & prices',
+    cat_tabs:'Tabs', cat_tabheaders:'Tab headers', cat_faults:'Corrective tab', cat_billing:'Billing & prices',
     cat_maint:'Maintenance tab', cat_reports:'Reports', cat_readings:'Readings & History tab',
     cat_warnerr:'Warnings & errors', cat_general:'General',
     customfields_title:'Custom fields', customfields_hint:'Add new fields to any form in the app.',
-    cf_section:'Add to', cf_section_reading:'New reading', cf_section_corrective:'Faults',
+    cf_section:'Add to', cf_section_reading:'New reading', cf_section_corrective:'Corrective',
     cf_section_service:'Log service', cf_section_generator:'Add generator',
     cf_label_ar:'Label (Arabic)', cf_label_en:'Label (English)', cf_type:'Field type',
     cf_type_text:'Short text', cf_type_textarea:'Long text', cf_type_number:'Number', cf_type_date:'Date', cf_type_select:'Dropdown',
@@ -846,14 +846,14 @@ const I18N = {
     cf_deactivate:'Deactivate', cf_activate:'Activate', cf_delete:'Delete permanently', cf_delete_confirm:'Permanently delete this field? (existing saved values are kept)',
     cf_need_label:'⚠️ Enter a label in at least one language', cf_none:'No custom fields yet', cf_inactive:'(inactive)',
     rep_type:'Report type', rep_t_readings:'Readings', rep_t_maint:'Scheduled maintenance',
-    rep_t_corr:'Faults & repairs', rep_t_fleet:'Fleet summary',
+    rep_t_corr:'Correctives & repairs', rep_t_fleet:'Fleet summary',
     rep_t_svclog:'Service history', svc_kind:'Kind', svc_interval:'Interval', svc_hours_at:'Hours at service',
     svc_backfilled:'Back-filled', svc_none:'No services recorded in this period',
     svc_recent:'Recent services performed', svc_delete_confirm:'Delete this entry from the service history?',
     svc_deleted:'✅ Deleted', svc_kind_time:'By time', svc_kind_hours:'By hours',
     rep_backup:'⬇ Full data backup (Excel)', rep_backup_done:'✅ Backup created',
     rep_all_gens:'All generators', rep_last_reading:'Last reading', rep_readings_n:'Readings',
-    rep_overdue_svc:'Overdue svc', rep_soon_svc:'Due soon', rep_open_faults:'Open faults', rep_total_faults:'Total faults',
+    rep_overdue_svc:'Overdue svc', rep_soon_svc:'Due soon', rep_open_faults:'Open correctives', rep_total_faults:'Total correctives',
     tab_new:'New', tab_history:'History', tab_reports:'Reports', tab_maint:'Service', tab_dashboard:'Dashboard', tab_setup:'Setup',
     title_maint:'Maintenance', sub_maint:'Scheduled service by time and running hours',
     maint_time:'By time', maint_hours:'By running hours',
@@ -2301,7 +2301,7 @@ function buildReportTable(){
     const openN = rows.filter(c=>c.status && c.status!=='closed').length;
     const dt = Math.round(rows.reduce((s2,c)=>s2+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
     return { type, headers, body, bad,
-      title: bi ? 'تقرير الأعطال والإصلاحات · Corrective Maintenance Report' : 'Corrective Maintenance Report',
+      title: bi ? 'تقرير الصيانة التصحيحية والإصلاحات · Corrective Maintenance Report' : 'Corrective Maintenance Report',
       subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
       period: reportPeriodLabel(), landscape: true,
       summary: `${bi?'عدد السجلات':'Records'}: ${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${dt}`,
@@ -2348,7 +2348,7 @@ function buildReportTable(){
     title: bi ? 'ملخص الأسطول · Fleet Summary Report' : 'Fleet Summary Report',
     subject: bi?'كل المولّدات':'All generators', client: '',
     period: bi?'حتى تاريخه':'As of today', landscape: true,
-    summary: `${bi?'مولّدات':'Generators'}: ${rows.length} · ${bi?'صيانة متأخرة':'Overdue services'}: ${totOver} · ${bi?'أعطال مفتوحة':'Open faults'}: ${totOpen}`,
+    summary: `${bi?'مولّدات':'Generators'}: ${rows.length} · ${bi?'صيانة متأخرة':'Overdue services'}: ${totOver} · ${bi?'تصحيحية مفتوحة':'Open correctives'}: ${totOpen}`,
     empty: rows.length===0 };
 }
 
@@ -2389,7 +2389,7 @@ function exportFullBackup(){
                faultServiceFee(c), linesSubtotal(faultPartsLines(c)), faultBillableTotal(c),
                inv ? (inv.invoiceNo||'') : ''];
       }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(corr), 'Faults');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(corr), 'Correctives');
 
   // Current maintenance baselines (what each schedule is counting from)
   const base = [['generator','kind','interval','lastDone/doneAtHrs','date','hrsPerDay']];
@@ -2685,7 +2685,7 @@ function exportFaultWord(id){
   const a = document.createElement('a');
   a.href = url;
   const safeName = (g?g.name:'generator').replace(/[^a-zA-Z0-9_-]+/g,'_');
-  a.download = `EnvironmSafe_Fault_${safeName}_${c.date||new Date().toISOString().slice(0,10)}.doc`;
+  a.download = `EnvironmSafe_Corrective_${safeName}_${c.date||new Date().toISOString().slice(0,10)}.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

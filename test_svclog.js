@@ -119,7 +119,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,'exportFullBackup()');
   const sheets = run(sb,'__sheets.map(s=>s.name)');
   check('backup has all 8 sheets',
-        JSON.stringify(sheets)===JSON.stringify(['Generators','Readings','ServiceHistory','Faults','MaintBaselines','PriceList','Invoices','InvoiceLines']),
+        JSON.stringify(sheets)===JSON.stringify(['Generators','Readings','ServiceHistory','Correctives','MaintBaselines','PriceList','Invoices','InvoiceLines']),
         JSON.stringify(sheets));
   const svcSheet = run(sb,`__sheets.find(s=>s.name==='ServiceHistory').rows`);
   check('service history sheet has header + 5 rows', svcSheet===6, 'got '+svcSheet);

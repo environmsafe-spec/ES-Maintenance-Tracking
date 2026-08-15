@@ -128,7 +128,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   let lines = run(sb,`linesFromWorkItem(billableWorkItems('FAO').find(w=>w.sourceId==='c1'))`);
   check('a fault produces a service line + one goods line', lines.length===2, 'got '+lines.length);
   check('first line is the service charge', lines[0].kind==='service' && lines[0].unitPrice===180);
-  check('service line carries the Fault ID as its ref', lines[0].ref==='Cor-818', lines[0].ref);
+  check('service line carries the Corrective ID as its ref', lines[0].ref==='Cor-818', lines[0].ref);
   check('goods line carries qty and price', lines[1].kind==='good' && lines[1].qty===1 && lines[1].unitPrice===120);
   check('both lines trace back to the same fault', lines.every(l=>l.sourceType==='fault' && l.sourceId==='c1'));
   let sLines = run(sb,`linesFromWorkItem(billableWorkItems('FAO').find(w=>w.sourceType==='service'))`);
@@ -252,11 +252,11 @@ function run(sb,c){return vm.runInContext(c,sb);}
   const plSheet = run(sb,`__sheets.find(s=>s.name==='PriceList').sheet.rows`);
   check('PriceList sheet has header + 3 items', plSheet.length===4, 'got '+plSheet.length);
 
-  console.log('\n=== Faults report carries the billable total ===');
+  console.log('\n=== Corrective report carries the billable total ===');
   run(sb,`STATE.reportType='corr';STATE.reportGenId='g1';STATE.reportFrom='2026-08-01';STATE.reportTo='2026-08-31';`);
   rt = run(sb,'buildReportTable()');
-  check('faults report has a billable-total column', rt.headers.some(h=>h.indexOf('Billable total')>=0), JSON.stringify(rt.headers));
-  check('faults report has an invoice-number column', rt.headers.indexOf('Invoice No.')>=0);
+  check('corrective report has a billable-total column', rt.headers.some(h=>h.indexOf('Billable total')>=0), JSON.stringify(rt.headers));
+  check('corrective report has an invoice-number column', rt.headers.indexOf('Invoice No.')>=0);
   check('billable total appears in the row', rt.body[0].indexOf('300.00')>=0, JSON.stringify(rt.body[0]));
 
   console.log('\n=== Official documents render ===');
@@ -446,7 +446,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   const lh = run(sb,`__sheets.find(s=>s.name==='InvoiceLines').sheet.rows[0]`);
   check('backup InvoiceLines sheet records the generator', lh.indexOf('generator')>=0, JSON.stringify(lh));
   check('backup still has all the original sheets',
-        ['Generators','Readings','ServiceHistory','Faults','MaintBaselines']
+        ['Generators','Readings','ServiceHistory','Correctives','MaintBaselines']
           .every(n=>run(sb,'__sheets.map(s=>s.name)').indexOf(n)>=0));
 
   console.log('\n=== New labels are translated + editable ===');

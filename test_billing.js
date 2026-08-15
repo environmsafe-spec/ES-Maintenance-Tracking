@@ -118,7 +118,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('FAO work excludes the UNHCR fault', work.every(w=>w.genId!=='u1'), JSON.stringify(work.map(w=>w.genId)));
   check('FAO work = 2 faults + 2 visits', work.length===4, 'got '+work.length);
   check('work list sorted newest first', work[0].date==='2026-08-13', work[0].date);
-  check('a service visit is worth one routine fee', work.find(w=>w.sourceType==='service').amount===22,
+  check('a service visit is worth one routine fee', work.find(w=>w.sourceType==='service').amount===23,
         work.find(w=>w.sourceType==='service').amount);
   check('nothing is invoiced yet', work.every(w=>!w.invoicedBy));
   check('no client filter returns everything', run(sb,'billableWorkItems(null).length')===5,
@@ -149,7 +149,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
     STATE.invDraft.lines.push({kind:'good',sourceType:'manual',sourceId:'',desc:'Oil filter for stock',qty:4,unitPrice:12.5,total:50});
   `);
   check('draft now has fault + visit + stock line', run(sb,'STATE.invDraft.lines.length')===4);
-  check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===372,
+  check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===373,
         run(sb,'linesSubtotal(STATE.invDraft.lines)'));
 
   console.log('\n=== Invoice numbering ===');
@@ -295,17 +295,17 @@ function run(sb,c){return vm.runInContext(c,sb);}
 
   console.log('\n=== Routine vs corrective rates ===');
   run(sb,`STATE.billing={};`);
-  check('routine rate defaults to 22', run(sb,'routineRate()')===22, run(sb,'routineRate()'));
+  check('routine rate defaults to 23 (FAO Option 2, 250 h)', run(sb,'routineRate()')===23, run(sb,'routineRate()'));
   check('corrective rate still defaults to 180', run(sb,'serviceRate()')===180);
+  run(sb,`STATE.billing={serviceRate:180, routineRate:22};`);
+  check('routine rate reads the settings doc (still changeable)', run(sb,'routineRate()')===22);
   run(sb,`STATE.billing={serviceRate:180, routineRate:23};`);
-  check('routine rate reads the settings doc', run(sb,'routineRate()')===23);
   let visitItem = run(sb,`billableWorkItems('FAO').find(w=>w.sourceType==='service')`);
   check('a routine visit is billed at the routine rate, not 180', visitItem.amount===23, visitItem.amount);
   let faultItem = run(sb,`billableWorkItems('FAO').find(w=>w.sourceId==='c1')`);
   check('a fault is still billed at the corrective rate', faultItem.fee===180, faultItem.fee);
-  run(sb,`STATE.billing={serviceRate:180, routineRate:22};`);
   check('bad routine rate falls back to the default',
-        run(sb,`(function(){STATE.billing={routineRate:'x'};var r=routineRate();STATE.billing={serviceRate:180,routineRate:22};return r;})()`)===22);
+        run(sb,`(function(){STATE.billing={routineRate:'x'};var r=routineRate();STATE.billing={serviceRate:180,routineRate:23};return r;})()`)===23);
 
   console.log('\n=== Quantities are editable ===');
   run(sb,`__l={kind:'good',desc:'Oil filter',qty:1,unitPrice:18,total:18};

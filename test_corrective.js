@@ -162,7 +162,7 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,`STATE.corrective = [{id:'x1'},{id:'x2',faultSeq:null}];`);
   check('faults with no faultSeq (legacy records) are ignored, not treated as 0', run(sb,`nextFaultSeq()`)===813);
 
-  console.log('\n=== Backfilling Fault IDs onto legacy records ===');
+  console.log('\n=== Backfilling Corrective IDs onto legacy records ===');
   run(sb,`
     STATE.corrective = [
       {id:'old2', date:'2026-02-01'},

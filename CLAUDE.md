@@ -13,7 +13,7 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 
 ### Firebase project
 - Project id: `generators-readings`
-- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`, `settings` (label overrides, single doc `labels`), `customfields` (user-defined extra fields)
+- Firestore collections: `generators`, `readings`, `maintenance`, `corrective`, `servicelog`, `settings` (single doc `labels` for label overrides + single doc `billing` for rates/currency/bank accounts), `customfields` (user-defined extra fields), `pricelist` (goods catalogue), `invoices`
 - **CRITICAL:** every collection must be listed in Firestore security rules or writes silently fail with "Could not save — check connection". The current rules are in `firestore-rules.txt`. Whenever you add a new collection, you MUST update those rules and the user must publish them in the Firebase console.
 
 ### Live URLs
@@ -23,11 +23,11 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 - Firestore rules: https://console.firebase.google.com/project/generators-readings/firestore/rules
 - The Netlify site is Git-connected to this repo's `main` branch (via `netlify.toml`'s build command, which copies `generator-readings.html` → `index.html`). Pushing to `main` auto-deploys — no manual drag-and-drop needed anymore.
 
-## Tabs / features (7 tabs)
+## Tabs / features (8 tabs)
 1. **New** — reading entry (grouped: core / voltage / current / engine-fluids / notes). Out-of-range values flagged.
 2. **History** — past readings, filterable, out-of-range highlighting.
-3. **Reports** — five report types, each exportable to branded A4 **PDF** (print-window), **Excel** (SheetJS) and **CSV**:
-   readings, scheduled maintenance, service history, faults & repairs, fleet summary. Plus a **full data backup** button (all collections → one xlsx).
+3. **Reports** — six report types, each exportable to branded A4 **PDF** (print-window), **Excel** (SheetJS) and **CSV**:
+   readings, scheduled maintenance, service history, faults & repairs, fleet summary, invoices. Plus a **full data backup** button (all collections → one xlsx, 8 sheets).
 4. **Service (maintenance)** — two schedules per generator, kept SEPARATE:
    - Time-based: Weekly / 3-Monthly / 6-Monthly / Yearly (7/90/180/365 days).
    - Hours-based: 125/250/500/1000/4000/8000/12000 running hours, driven by the latest running-hours reading.
@@ -35,9 +35,37 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
    - **Nesting:** logging a larger hours service auto-resets all smaller ones (500 → also 250,125).
    - **Due-date rule (important, was a real bug):** hours-based due DATE is anchored to the **last service date**, not today: `dueDate = lastServiceDate + round(intervalHrs / hrsPerDay)`. Default `hrsPerDay = 24` unless set per generator. A service is "overdue" if EITHER the date passed OR the hours were reached (a stale reading must never hide an overdue service).
    - Every logged/back-filled service also writes a permanent record to `servicelog` (the audit trail).
-5. **Faults (corrective)** — every fault gets an auto-assigned serial **Fault ID** (`Cor-813`, `Cor-814`, ...; see `nextFaultSeq()` — derived from the highest `faultSeq` already in `STATE.corrective`, no separate counter doc needed). Also logs: short description, full description, type, severity, status, hours-at-event, causes of fault, action, parts, downtime, recommendations (optional), by, up to 4 photos (client-side compressed, stored as base64 in the doc). Status cycles open→in_progress→closed. Colour-coded severity. **Every field can be edited at any status** via the ✎ Edit button on each fault card (not just status) — editing never changes the Fault ID. Each fault also has **🖨️ Print PDF** and **📄 Word** buttons that generate an official single-fault report (logo header, Fault ID, all fields, photos appended at the end, and signature blocks for the EnvironmSafe engineer + client supervisor).
-6. **Dashboard** — per-generator latest-status cards, trend charts, and a service+faults summary card.
-7. **Setup** — add/rename/remove generators; contact card; **Custom fields** panel (add new fields — text/long text/number/date/dropdown — to the New Reading, Faults, Log Service, or Add Generator forms; deactivate/delete without losing historical data); **Labels** panel (rename any text/tab/label in the app, per-language, grouped by section with search).
+5. **Corrective** — the user-facing wording is **"corrective"**, never "fault" (renamed Aug 2026); the code, the `corrective` collection and the `faultId`/`faultSeq`/`partsLines` field names are unchanged, so records stay readable. Every record gets an auto-assigned serial **Corrective ID** (`Cor-813`, `Cor-814`, ...; see `nextFaultSeq()` — derived from the highest `faultSeq` already in `STATE.corrective`, no separate counter doc needed). Also logs: short description, full description, type, severity, status, hours-at-event, causes of fault, action, parts, downtime, recommendations (optional), by, up to 4 photos (client-side compressed, stored as base64 in the doc). Status cycles open→in_progress→closed. Colour-coded severity. **Every field can be edited at any status** via the ✎ Edit button on each fault card (not just status) — editing never changes the Fault ID. Each fault also has **🖨️ Print PDF** and **📄 Word** buttons that generate an official single-fault report (logo header, Fault ID, all fields, photos appended at the end, and signature blocks for the EnvironmSafe engineer + client supervisor).
+6. **Invoices (billing)** — see the Billing section below.
+7. **Dashboard** — per-generator latest-status cards, trend charts, and a service+faults summary card.
+8. **Setup** — add/rename/remove generators; contact card; **Billing settings** (corrective + routine visit rates, currency, the two bank accounts); **Goods price list** (add/edit/deactivate/delete items); **Custom fields** panel (add new fields — text/long text/number/date/dropdown — to the New Reading, Faults, Log Service, or Add Generator forms; deactivate/delete without losing historical data); **Labels** panel (rename any text/tab/label in the app, per-language, grouped by section with search).
+
+## Billing / invoicing (added Aug 2026)
+Three pieces, deliberately kept loosely coupled:
+- **Price list** (`pricelist` collection, Setup tab) — the goods catalogue: `{nameAr, nameEn, unit, unitPrice, active}`. It is only a convenience: **any item can always be typed in free-hand with its own price**, both on a fault and on an invoice. Never force a user through the catalogue.
+- **Two contract rates, not one.** `serviceRate()` is the **corrective** (fault) visit fee, default **180 USD**; `routineRate()` is the **routine/preventive** visit fee, default **23 USD**. Both come from `settings/billing` and are editable in Setup. These are the FAO financial proposal's Option 2 figures (ANNEX C-1: routine every 250 h at 23 USD/visit, corrective at 180 USD/visit). Option 1 (125 h) quotes 22 for both — do not silently switch the defaults if a different option is signed; change them in Setup.
+- **Billable work.** Every fault carries `serviceFee` (defaults to the corrective rate) plus `partsLines: [{itemId, name, qty, unitPrice, total}]`, edited in the Faults form via `renderFaultBillingBlock()` / `bindFaultBillingBlock()`. Every **service VISIT** carries one routine fee — note `serviceVisits()` groups `servicelog` rows by `genId|date`, because nesting writes several rows for one visit and it must be billed **once**, not three times. Quantities and unit prices are editable inline on every line (`renderLineEditor(..., {editable:true})`).
+- **Invoices** (`invoices` collection). An invoice is a header plus a flat `lines[]` array; each line is `{kind:'service'|'good', sourceType:'fault'|'service'|'manual', sourceId, ref, desc, qty, unitPrice, total}`. Numbers are serial (`INV-1001`, ...) via `nextInvoiceSeq()`, derived from the highest `invoiceSeq` — same trick as `nextFaultSeq()`, no counter doc. Status follow-up: draft → sent → partly_paid → paid → cancelled, with `paidAmount`, `balance`, overdue detection off `dueDate`, and a receivables summary card (invoiced / collected / outstanding).
+
+**Double-billing protection is derived, never written back.** `invoicedSourceKeys()` scans the invoices for `sourceType:sourceId` pairs, so a fault knows it has been billed without any field being set on it, and the two can never drift. Cancelled invoices release their work again. When *editing* an invoice, pass its own id as `exceptInvoiceId` so its own lines don't read as "already invoiced".
+
+`sourceType:'manual'` lines are goods added straight onto the invoice with no job behind them — this is how **stock supply** (parts handed over but not fitted during a repair) is billed. Manual lines never mark anything as invoiced.
+
+### Issuing a document (scope + detail)
+An invoice **always stores every line**, so its own total never changes and no record is lost. What varies is only the printed document, chosen per print from two dropdowns on the invoice card:
+- **scope** — `all` / `services` / `goods`, via `scopeLines()`. A partial scope prints its own subtotal, is stamped "partial issue", and deliberately does **not** carry the discount or the payment (those belong to the whole invoice).
+- **detail** — `detailed` / `summary`, via `summariseLines()`. Summary gives each generator **two lines — one for corrective visits, one for routine visits** — carrying the total quantity for the period, with no per-fault references. Grouping keys include the unit price, so a mixed rate splits into separate lines and the summary total always equals the detailed total (there is a test for exactly this).
+Both flow through `documentLines()` / `documentTotals()` into `invoiceReportBody(inv, scope, detail)`.
+
+Invoice header carries `orderNo`, `contractNo` (FRA/contract), `serialNo` and `ref` alongside the serial `invoiceNo`. Bank details for payment print at the foot of every document from `bankAccounts()` (`settings/billing.bank1Name/bank1Acct/bank2Name/bank2Acct`).
+
+Lines also carry `genId`/`genName` — that is what lets a summary invoice group by genset. Old lines without them still summarise (they fall into an unnamed group); never assume the field is present.
+
+Money: always go through `round2()` / `moneyNum()` / `money()`; never print a raw float. Currency comes from `billingCurrency()`.
+
+**Backward compatibility is a hard requirement here.** Faults saved before billing existed have no `serviceFee` and no `partsLines`; they must keep working and fall back to the configured rate. `test_billing.js` has an "Existing records keep working" section — keep it passing.
+
+`seed_pricelist.js` loads the 39-item catalogue from the FAO financial proposal into `pricelist` (idempotent, matched on English name; `--update` also corrects prices). It needs the published rules.
 
 ## HOW — conventions you MUST follow
 - **Keep it one single HTML file.** Do not split into modules or add a build system unless the user explicitly asks. The whole workflow depends on drag-and-drop of one file.
@@ -58,9 +86,11 @@ Node test suites live alongside the HTML (they extract the inline `<script>` and
 - `test_corrective.js` — corrective events + the four report builders
 - `test_svclog.js` — service history log, all-generators reports, backup
 - `test_labels_customfields.js` — label-override precedence in `t()`, label categorization, custom-field definitions/filtering/rendering/collection, and their flow into report exports
+- `test_billing.js` — price list, corrective vs routine rates, fault/service billable totals, service-visit grouping (nesting billed once), editable quantities, scope (services/goods/both) and summary grouping, invoice numbering/totals/discount/balance, payment status transitions, overdue detection, double-billing protection, receivables summary, bank + header fields on the document, backward compatibility with pre-billing records, and the report/backup exports
 - `simulate_firestore.js` — auth, two-device sync, permission-denied diagnostics
 
-Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields; do node $f.js; done`
+Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields test_billing; do node $f.js; done`
+(The suites read `/home/claude/generator-readings.html`; symlink it there if your checkout lives elsewhere.)
 All suites must print `0 failed`. If you add a feature, add tests for it.
 
 For UI changes, a Playwright headless check at 412×892 (mock Firebase, since the real one is network-gated in CI) catches overflow/console errors. See `firebase_mock_init.js` for the seed/mock.

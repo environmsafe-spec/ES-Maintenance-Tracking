@@ -76,6 +76,40 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('good reading row has empty flags', /,$/.test(lines[1]), JSON.stringify(lines[1].slice(-20)));
   check('UTF-8 BOM present for Excel', csv.charCodeAt(0)===0xFEFF);
 
+  const I18NGEN = run(sb,`t('f_generator')`);
+  console.log('\n=== Multi-generator selection ===');
+  run(sb,`STATE.reportGenIds=[]; STATE.reportGenId='g1';`);
+  check('empty selection falls back to the single generator',
+        JSON.stringify(run(sb,'selectedReportGenIds()'))==='["g1"]', run(sb,'JSON.stringify(selectedReportGenIds())'));
+  check('one generator is not multi', run(sb,'reportIsMultiGen()')===false);
+  run(sb,`STATE.reportGenId='__all__';`);
+  check("'__all__' still means every generator", run(sb,'selectedReportGenIds().length')===run(sb,'STATE.generators.length'));
+  run(sb,`STATE.reportGenIds=['g1','g2']; STATE.reportGenId='__all__';`);
+  check('an explicit pair is honoured', JSON.stringify(run(sb,'selectedReportGenIds()'))==='["g1","g2"]');
+  check('two generators is multi', run(sb,'reportIsMultiGen()')===true);
+  run(sb,`STATE.reportGenIds=['g1','ghost'];`);
+  check('ids of deleted generators are ignored',
+        JSON.stringify(run(sb,'selectedReportGenIds()'))==='["g1"]', run(sb,'JSON.stringify(selectedReportGenIds())'));
+  check('genSelMatch: array membership', run(sb,`genSelMatch(['g1','g2'],'g2')`)===true && run(sb,`genSelMatch(['g1'],'g2')`)===false);
+  check('genSelMatch: single id', run(sb,`genSelMatch('g1','g1')`)===true && run(sb,`genSelMatch('g1','g2')`)===false);
+  check('genSelMatch: __all__ matches anything', run(sb,`genSelMatch('__all__','anything')`)===true);
+
+  console.log('\n=== Readings across several generators ===');
+  run(sb,`STATE.reportGenIds=['g1']; STATE.reportType='readings';
+          STATE.reportMode='range'; STATE.reportFrom='2026-07-01'; STATE.reportTo='2026-07-31';`);
+  const oneGen = run(sb,'readingsForReport().length');
+  run(sb,`STATE.reportGenIds=['g1','g2'];`);
+  const twoGen = run(sb,'readingsForReport().length');
+  check('picking a second generator brings in its readings', twoGen > oneGen, oneGen+' -> '+twoGen);
+  let rt = run(sb,'buildReportTable()');
+  check('a multi-generator table gains a generator column', rt.headers[0]===I18NGEN, rt.headers[0]);
+  check('every row carries its generator name', rt.body.every(r=>!!r[0]), JSON.stringify(rt.body[0]));
+  check('subject names the count, not one machine', /generators/.test(rt.subject) || rt.subject===run(sb,`t('rep_all_gens')`), rt.subject);
+  run(sb,`STATE.reportGenIds=['g1'];`);
+  rt = run(sb,'buildReportTable()');
+  check('a single-generator table has no generator column', rt.headers[0]!==I18NGEN, rt.headers[0]);
+  check('subject is the generator name', rt.subject===run(sb,`genById('g1').name`), rt.subject);
+
   console.log('\n=== empty period handled ===');
   run(sb,`STATE.reportMode='day'; STATE.reportDay='2026-01-01';`);
   rows=run(sb,'readingsForReport()');

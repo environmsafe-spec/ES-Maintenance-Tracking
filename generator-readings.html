@@ -614,6 +614,11 @@ const I18N = {
     bill_bank1_name:'اسم البنك الأول', bill_bank1_acct:'رقم الحساب الأول',
     bill_bank2_name:'اسم البنك الثاني', bill_bank2_acct:'رقم الحساب الثاني',
     bill_banks_hint:'تظهر هذه البيانات في أسفل كل فاتورة مطبوعة.',
+    rep_gen_multi_hint:'اختر مولّدًا واحدًا أو أكثر.',
+    rep_n_gens:'{n} مولّدات',
+    rep_pack_hint:'ملف واحد يحتوي تقرير كل صيانة تصحيحية بنموذجها الرسمي الكامل، واحدًا تلو الآخر.',
+    rep_pack_pdf:'🖨️ تقارير كاملة PDF', rep_pack_word:'📄 تقارير كاملة Word',
+    rep_pack_done:'✅ تم تجهيز {n} تقرير',
     rep_invoices:'الفواتير', rep_invoices_title:'تقرير الفواتير',
     rep_photos_title:'الصور المرفقة',
     labels_title:'تخصيص النصوص والتبويبات', labels_hint:'غيّر أي نص يظهر في التطبيق (عربي/إنجليزي). اترك الحقل فارغًا لاستخدام النص الافتراضي.',
@@ -670,7 +675,7 @@ const I18N = {
     rep_period_label:'الفترة', rep_printed:'تاريخ الطباعة', rep_prepared:'إعداد',
     title_new:'قراءة جديدة', sub_new:'سجّل قراءات المولد اليوم',
     title_history:'السجل', sub_history:'قراءات سابقة لجميع المولدات',
-    title_reports:'التقارير', sub_reports:'تقرير لكل مولد لأي يوم أو فترة',
+    title_reports:'التقارير', sub_reports:'تقارير لمولّد أو أكثر لأي يوم أو فترة',
     title_dashboard:'لوحة المعلومات', sub_dashboard:'الاتجاهات والحالة الحالية',
     title_setup:'الإعداد', sub_setup:'إدارة المولدات والإعدادات',
     connecting:'جارٍ الاتصال...', couldnt_connect:'تعذّر الاتصال.', try_again:'حاول مرة أخرى',
@@ -828,6 +833,11 @@ const I18N = {
     bill_bank1_name:'Bank 1 name', bill_bank1_acct:'Bank 1 account no.',
     bill_bank2_name:'Bank 2 name', bill_bank2_acct:'Bank 2 account no.',
     bill_banks_hint:'These appear at the bottom of every printed invoice.',
+    rep_gen_multi_hint:'Tick one or more generators.',
+    rep_n_gens:'{n} generators',
+    rep_pack_hint:'One file containing the full official report for every corrective record, one after the other.',
+    rep_pack_pdf:'🖨️ Full reports PDF', rep_pack_word:'📄 Full reports Word',
+    rep_pack_done:'✅ {n} report(s) prepared',
     rep_invoices:'Invoices', rep_invoices_title:'Invoices report',
     rep_photos_title:'Attached Photos',
     labels_title:'Customize labels & tabs', labels_hint:'Rename any text shown in the app (Arabic/English). Leave a field blank to keep the default text.',
@@ -884,7 +894,7 @@ const I18N = {
     rep_period_label:'Period', rep_printed:'Printed', rep_prepared:'Prepared by',
     title_new:'New Reading', sub_new:'Log today\u2019s generator readings',
     title_history:'History', sub_history:'Past readings for all generators',
-    title_reports:'Reports', sub_reports:'Per-generator report for any day or period',
+    title_reports:'Reports', sub_reports:'Reports for one or more generators, any day or period',
     title_dashboard:'Dashboard', sub_dashboard:'Trends and current status',
     title_setup:'Setup', sub_setup:'Manage generators & settings',
     connecting:'Connecting...', couldnt_connect:'Couldn\u2019t connect.', try_again:'Try again',
@@ -1007,6 +1017,7 @@ let STATE = {
   charts: {},
   everRendered: false,
   reportGenId: null,
+  reportGenIds: [],      // multi-select; empty falls back to reportGenId (see selectedReportGenIds)
   reportMode: 'range',   // 'day' or 'range'
   reportDay: '',
   reportFrom: '',
@@ -1065,8 +1076,8 @@ function outOfRangeKeys(r){
 
 // Filter readings for a generator within the currently-selected report period.
 function readingsForReport(){
-  const genId = STATE.reportGenId;
-  if(!genId) return [];
+  const sel = selectedReportGenIds();
+  if(!sel.length) return [];
   let from=null, to=null;
   if(STATE.reportMode==='day'){
     if(!STATE.reportDay) return [];
@@ -1078,7 +1089,7 @@ function readingsForReport(){
     to   = new Date(STATE.reportTo + 'T23:59:59.999');
   }
   return STATE.readings
-    .filter(r=> r.genId===genId)
+    .filter(r=> genSelMatch(sel, r.genId))
     .filter(r=>{ const ts=new Date(r.timestamp); return ts>=from && ts<=to; })
     .sort((a,b)=> new Date(a.timestamp)-new Date(b.timestamp));
 }
@@ -1738,7 +1749,7 @@ function corrReportRows(genId){
   const from = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportFrom;
   const to   = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportTo;
   return STATE.corrective
-    .filter(c => genId==='__all__' ? true : c.genId===genId)
+    .filter(c => genSelMatch(genId, c.genId))
     .filter(c => { const d = c.date||''; return d >= from && d <= to; })
     .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
 }
@@ -1783,7 +1794,7 @@ function svcLogRows(genId){
   const from = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportFrom;
   const to   = STATE.reportMode==='day' ? STATE.reportDay : STATE.reportTo;
   return STATE.svclog
-    .filter(x => genId==='__all__' ? true : x.genId===genId)
+    .filter(x => genSelMatch(genId, x.genId))
     .filter(x => { const d = x.date||''; return d >= from && d <= to; })
     .sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
 }
@@ -1791,9 +1802,8 @@ function svcLogRows(genId){
 function svcKindLabel(k){ return k==='time' ? t('svc_kind_time') : t('svc_kind_hours'); }
 
 function renderSvcLogReport(){
-  const all = STATE.reportGenId==='__all__';
-  const g = all ? null : genById(STATE.reportGenId);
-  const rows = svcLogRows(STATE.reportGenId);
+  const all = reportIsMultiGen();
+  const rows = svcLogRows(selectedReportGenIds());
   const loc = STATE.lang==='ar' ? 'ar' : undefined;
   if(!rows.length){
     return `<div class="card"><div class="empty"><div class="em-ic">🛠️</div>${t('svc_none')}</div></div>`;
@@ -1813,7 +1823,7 @@ function renderSvcLogReport(){
   return `
   <div class="card">
     <div class="rowbetween" style="margin-bottom:6px;">
-      <h3 style="margin:0;">${all?t('rep_all_gens'):(g?g.name:'')}</h3>
+      <h3 style="margin:0;">${escHtml(reportSubjectLabel())}</h3>
       <span style="font-size:12px;color:var(--muted);">${rows.length}</span>
     </div>
     <div class="rp-tablewrap">
@@ -1833,10 +1843,21 @@ function renderSvcLogReport(){
   </div>`;
 }
 
+// Maintenance status for every ticked generator, each row tagged with its generator.
+function maintReportRowsMulti(){
+  const out = [];
+  selectedReportGenIds().forEach(id=>{
+    const g = genById(id);
+    maintReportRows(id).forEach(r=>out.push(Object.assign({ genId: id, genName: g ? g.name : '' }, r)));
+  });
+  return out;
+}
+
 function renderMaintReport(){
-  const g = genById(STATE.reportGenId);
-  const rows = maintReportRows(STATE.reportGenId);
+  const multi = reportIsMultiGen();
+  const rows = maintReportRowsMulti();
   const body = rows.map(r=>`<tr>
+      ${multi?`<td>${escHtml(r.genName)}</td>`:''}
       <td>${r.group}</td><td><b>${r.interval}</b></td><td>${r.lastDone}</td><td>${r.due}</td>
       <td class="${r.state==='over'?'rp-bad':''}">${r.remaining}</td>
     </tr>`).join('');
@@ -1845,12 +1866,12 @@ function renderMaintReport(){
   return `
   <div class="card">
     <div class="rowbetween" style="margin-bottom:6px;">
-      <h3 style="margin:0;">${g?g.name:''}</h3>
+      <h3 style="margin:0;">${escHtml(reportSubjectLabel())}</h3>
       <span style="font-size:12px;color:var(--muted);">${t('st_over')} ${over} · ${t('st_soon')} ${soon}</span>
     </div>
     <div class="rp-tablewrap">
       <table class="rp-table">
-        <thead><tr><th>${t('rep_type')}</th><th>${t('maint_interval')}</th><th>${t('maint_lastdone')}</th><th>${t('maint_nextdue')}</th><th>${t('maint_status')}</th></tr></thead>
+        <thead><tr>${multi?`<th>${t('f_generator')}</th>`:''}<th>${t('rep_type')}</th><th>${t('maint_interval')}</th><th>${t('maint_lastdone')}</th><th>${t('maint_nextdue')}</th><th>${t('maint_status')}</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>
@@ -1910,8 +1931,8 @@ function renderInvReport(){
 }
 
 function renderCorrReport(){
-  const g = genById(STATE.reportGenId);
-  const rows = corrReportRows(STATE.reportGenId);
+  const multi = reportIsMultiGen();
+  const rows = corrReportRows(selectedReportGenIds());
   const loc = STATE.lang==='ar' ? 'ar' : undefined;
   if(!rows.length){
     return `<div class="card"><div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div></div>`;
@@ -1932,7 +1953,7 @@ function renderCorrReport(){
   return `
   <div class="card">
     <div class="rowbetween" style="margin-bottom:6px;">
-      <h3 style="margin:0;">${g?g.name:''}</h3>
+      <h3 style="margin:0;">${escHtml(reportSubjectLabel())}</h3>
       <span style="font-size:12px;color:var(--muted);">${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${downtime}</span>
     </div>
     <div class="rp-tablewrap">
@@ -1944,6 +1965,12 @@ function renderCorrReport(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
       <button class="btn btn-primary" id="rp-pdf" style="flex:1;min-width:130px;">${t('rep_pdf')}</button>
       <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
+    </div>
+    <hr class="section-sep">
+    <div class="hint" style="margin-bottom:6px;">${t('rep_pack_hint')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline" id="rp-pack-pdf" style="flex:1;min-width:150px;">${t('rep_pack_pdf')}</button>
+      <button class="btn btn-outline" id="rp-pack-word" style="flex:1;min-width:120px;">${t('rep_pack_word')}</button>
     </div>
   </div>`;
 }
@@ -1989,9 +2016,6 @@ function renderReports(){
     return `<div class="empty"><div class="em-ic">📄</div>${t('no_gens')}</div>`;
   }
   if(!STATE.reportGenId) STATE.reportGenId = STATE.generators[0].id;
-  if(STATE.reportGenId==='__all__' && !(STATE.reportType==='svclog'||STATE.reportType==='corr')){
-    STATE.reportGenId = STATE.generators[0].id;
-  }
   if(!STATE.reportDay) STATE.reportDay = todayStr();
   if(!STATE.reportTo) STATE.reportTo = todayStr();
   if(!STATE.reportFrom){
@@ -2000,9 +2024,18 @@ function renderReports(){
     STATE.reportFrom = d.toISOString().slice(0,10);
   }
 
-  const allowAll = (STATE.reportType==='svclog' || STATE.reportType==='corr');
-  const genOptions = (allowAll ? `<option value="__all__" ${STATE.reportGenId==='__all__'?'selected':''}>${t('rep_all_gens')}</option>` : '')
-    + STATE.generators.map(g=>`<option value="${g.id}" ${STATE.reportGenId===g.id?'selected':''}>${g.name} · ${g.client}</option>`).join('');
+  const picked = selectedReportGenIds();
+  const allPicked = picked.length === STATE.generators.length && STATE.generators.length > 0;
+  const genPicker = `
+    <label class="pickrow" style="border-top:none;padding-top:2px;">
+      <input type="checkbox" id="rp-gen-all"${allPicked?' checked':''}>
+      <span class="pickrow-main"><b>${t('rep_all_gens')}</b></span>
+    </label>` + STATE.generators.map(g=>`
+    <label class="pickrow">
+      <input type="checkbox" data-rpgen="${g.id}"${picked.indexOf(g.id)>=0?' checked':''}>
+      <span class="pickrow-main">${escHtml(g.name)}
+        <span class="pickrow-sub">${escHtml(g.client||'')}</span></span>
+    </label>`).join('');
 
   const periodControls = STATE.reportMode==='day'
     ? `<label class="req">${t('rep_date')}</label><input type="date" id="rp-day" value="${STATE.reportDay}">`
@@ -2042,7 +2075,8 @@ function renderReports(){
     <div class="genpicker" style="margin-bottom:10px;">${typeChips}</div>
 
     ${needsGen ? `<label class="req">${t('f_generator')}</label>
-    <select id="rp-gen">${genOptions}</select>` : ''}
+    <div class="hint">${t('rep_gen_multi_hint')}</div>
+    ${genPicker}` : ''}
 
     ${needsPeriod ? `<label class="req" style="margin-top:14px;">${t('rep_period')}</label>
     <div class="genpicker" style="margin-bottom:8px;">
@@ -2065,28 +2099,30 @@ function fmtDateShort(iso){
 }
 
 function renderReportResults(rows){
-  const g = genById(STATE.reportGenId);
+  const multi = reportIsMultiGen();
+  const g = multi ? null : genById(selectedReportGenIds()[0]);
   const loc = STATE.lang==='ar' ? 'ar' : undefined;
   const periodLabel = STATE.reportMode==='day'
     ? new Date(STATE.reportDay+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'long',day:'numeric'})
     : `${new Date(STATE.reportFrom+'T00:00:00').toLocaleDateString(loc)} → ${new Date(STATE.reportTo+'T00:00:00').toLocaleDateString(loc)}`;
 
   if(!rows.length){
-    return `<div class="card"><h3>${g?g.name:''} · ${periodLabel}</h3>
+    return `<div class="card"><h3>${escHtml(reportSubjectLabel())} · ${periodLabel}</h3>
       <div class="empty" style="padding:24px 0;">${t('rep_none')}</div></div>`;
   }
 
   const flaggedCount = rows.filter(r=>flagsFor(r).length>0).length;
 
-  const cols = [
+  const cols = (multi?[['__gen', t('f_generator')]]:[]).concat([
     ['when',t('col_when')], ['hours',t('col_hrs')], ['load',t('col_kw')],
     ['vL1',t('col_vl1')], ['vL2',t('col_vl2')], ['vL3',t('col_vl3')], ['freq',t('col_hz')],
     ['coolantT',t('col_cool')], ['oilP',t('col_oilp')], ['battV',t('col_batt')], ['fuel',t('col_fuel')],
-  ];
+  ]);
   const headCells = cols.map(([k,label])=>`<th>${label}</th>`).join('');
   const bodyRows = rows.map(r=>{
     const bad = outOfRangeKeys(r);
     const cells = cols.map(([k,label])=>{
+      if(k==='__gen') return `<td>${escHtml((genById(r.genId)||{}).name||'—')}</td>`;
       if(k==='when') return `<td class="rp-when">${fmtDateShort(r.timestamp)}</td>`;
       const v = (r[k]===undefined||r[k]==='') ? '–' : r[k];
       const cls = bad.has(k) ? ' class="rp-bad"' : '';
@@ -2099,7 +2135,7 @@ function renderReportResults(rows){
   <div class="card">
     <div class="rowbetween" style="align-items:flex-start;">
       <div>
-        <h3 style="margin-bottom:2px;">${g?g.name:''} <span class="badge ${g&&g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${g?g.client:''}</span></h3>
+        <h3 style="margin-bottom:2px;">${escHtml(reportSubjectLabel())}${g?` <span class="badge ${g.client==='UNHCR'?'badge-unhcr':'badge-fao'}">${escHtml(g.client||'')}</span>`:''}</h3>
         <div style="font-size:12.5px;color:var(--muted);">${periodLabel}</div>
       </div>
     </div>
@@ -2128,8 +2164,28 @@ function bindReports(){
     chip.addEventListener('click', ()=>{ STATE.reportType = chip.dataset.rptype; STATE.reportRun=false; render(); });
   });
 
-  const genSel = document.getElementById('rp-gen');
-  if(genSel) genSel.addEventListener('change', ()=>{ STATE.reportGenId = genSel.value; STATE.reportRun=false; render(); });
+  const setGenSelection = ids => {
+    STATE.reportGenIds = ids;
+    STATE.reportGenId = ids.length === 1 ? ids[0] : (ids.length ? '__all__' : STATE.reportGenId);
+    STATE.reportRun = false;
+    render();
+  };
+
+  const allBox = document.getElementById('rp-gen-all');
+  if(allBox) allBox.addEventListener('change', ()=>{
+    setGenSelection(allBox.checked ? STATE.generators.map(g=>g.id) : []);
+  });
+
+  document.querySelectorAll('[data-rpgen]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const current = selectedReportGenIds();
+      const id = cb.dataset.rpgen;
+      const next = cb.checked
+        ? (current.indexOf(id) >= 0 ? current : current.concat([id]))
+        : current.filter(x=>x !== id);
+      setGenSelection(next);
+    });
+  });
 
   document.querySelectorAll('[data-rpmode]').forEach(chip=>{
     chip.addEventListener('click', ()=>{ STATE.reportMode = chip.dataset.rpmode; STATE.reportRun=false; render(); });
@@ -2158,6 +2214,10 @@ function bindReports(){
   if(pdfBtn) pdfBtn.addEventListener('click', exportReportPDF);
   const xlsxBtn = document.getElementById('rp-xlsx');
   if(xlsxBtn) xlsxBtn.addEventListener('click', exportReportXLSX);
+  const packPdf = document.getElementById('rp-pack-pdf');
+  if(packPdf) packPdf.addEventListener('click', printCorrectivePack);
+  const packWord = document.getElementById('rp-pack-word');
+  if(packWord) packWord.addEventListener('click', exportCorrectivePackWord);
   const backupBtn = document.getElementById('rp-backup');
   if(backupBtn) backupBtn.addEventListener('click', exportFullBackup);
 }
@@ -2175,6 +2235,45 @@ const REPORT_COLS = [
   ['coolantT','Cool °C','المبرّد'], ['battV','Batt V','البطارية'], ['fuel','Fuel %','الوقود'],
   ['notes','Notes','ملاحظات'],
 ];
+
+/* ---- which generators a report covers ----
+   The Reports tab lets several generators be ticked at once. `reportGenIds` holds that
+   selection; when it is empty we fall back to the older single `reportGenId` (which may
+   also be '__all__'), so every existing caller keeps working unchanged. */
+function selectedReportGenIds(){
+  const known = (STATE.generators||[]).map(g=>g.id);
+  const picked = Array.isArray(STATE.reportGenIds)
+    ? STATE.reportGenIds.filter(id=>known.indexOf(id) >= 0) : [];
+  if(picked.length) return picked;
+  if(STATE.reportGenId === '__all__') return known.slice();
+  if(STATE.reportGenId && known.indexOf(STATE.reportGenId) >= 0) return [STATE.reportGenId];
+  return known.slice(0, 1);
+}
+
+// Accepts an array of ids, a single id, or '__all__'/null meaning "everything".
+function genSelMatch(sel, id){
+  if(Array.isArray(sel)) return sel.indexOf(id) >= 0;
+  if(sel === '__all__' || sel === null || sel === undefined) return true;
+  return id === sel;
+}
+
+// True when the report covers more than one generator, so tables need a generator column.
+function reportIsMultiGen(){ return selectedReportGenIds().length > 1; }
+
+// Name for the report header: the generator, or "N generators" when several are ticked.
+function reportSubjectLabel(){
+  const ids = selectedReportGenIds();
+  if(ids.length === 1){ const g = genById(ids[0]); return g ? g.name : ''; }
+  if(ids.length === (STATE.generators||[]).length) return t('rep_all_gens');
+  return t('rep_n_gens', { n: ids.length });
+}
+
+// Shared client only, otherwise blank (a mixed-client report has no single client).
+function reportClientLabel(){
+  const clients = selectedReportGenIds().map(id=>{ const g = genById(id); return g ? g.client : ''; });
+  const uniq = clients.filter((c,i)=>c && clients.indexOf(c)===i);
+  return uniq.length === 1 ? uniq[0] : '';
+}
 
 function reportPeriodLabel(){
   const loc = STATE.lang==='ar' ? 'ar' : undefined;
@@ -2211,18 +2310,21 @@ function buildReportTable(){
   const type = STATE.reportType || 'readings';
 
   if(type==='readings'){
+    const multi = reportIsMultiGen();
     const rows = readingsForReport();
     const hasCF = customFieldsFor('reading').length > 0;
-    const headers = REPORT_COLS.map(c=> bi ? `${c[1]} / ${c[2]}` : c[1]).concat([bi?'خارج النطاق / Flags':'Flags']).concat(hasCF?[t('customfields_title')]:[]);
+    const headers = (multi?[t('f_generator')]:[])
+      .concat(REPORT_COLS.map(c=> bi ? `${c[1]} / ${c[2]}` : c[1])).concat([bi?'خارج النطاق / Flags':'Flags']).concat(hasCF?[t('customfields_title')]:[]);
     const body=[], bad=[];
     rows.forEach(r=>{
       const oor = outOfRangeKeys(r);
-      const line = REPORT_COLS.map(c=>{
+      const gg = genById(r.genId);
+      const line = (multi?[gg?gg.name:'']:[]).concat(REPORT_COLS.map(c=>{
         if(c[0]==='timestamp') return new Date(r.timestamp).toLocaleString(loc);
         const v = r[c[0]];
         return (v===undefined||v===null||v==='') ? '' : v;
-      });
-      const mask = REPORT_COLS.map(c=> oor.has(c[0]));
+      }));
+      const mask = (multi?[false]:[]).concat(REPORT_COLS.map(c=> oor.has(c[0])));
       line.push(flagsFor(r).join('; ')); mask.push(false);
       if(hasCF){ line.push(customFieldsSummary('reading', r.customFields)); mask.push(false); }
       body.push(line); bad.push(mask);
@@ -2230,30 +2332,31 @@ function buildReportTable(){
     const flagged = rows.filter(r=>flagsFor(r).length>0).length;
     return { type, headers, body, bad,
       title: bi ? 'تقرير قراءات المولّد · Generator Reading Report' : 'Generator Reading Report',
-      subject: g?g.name:'', client: g?g.client:'',
+      subject: reportSubjectLabel(), client: reportClientLabel(),
       period: reportPeriodLabel(), landscape: true,
       summary: `${bi?'إجمالي القراءات':'Total readings'}: ${rows.length} · ${bi?'قراءات خارج النطاق':'With out-of-range values'}: ${flagged}`,
       empty: rows.length===0 };
   }
 
   if(type==='maint'){
-    const rows = maintReportRows(STATE.reportGenId);
-    const headers = [t('rep_type'), t('maint_interval'), t('maint_lastdone'), t('maint_nextdue'), t('maint_status')];
-    const body = rows.map(r=>[r.group, r.interval, r.lastDone, r.due, r.remaining]);
-    const bad  = rows.map(r=>[false,false,false,false, r.state==='over']);
+    const multi = reportIsMultiGen();
+    const rows = maintReportRowsMulti();
+    const headers = (multi?[t('f_generator')]:[]).concat([t('rep_type'), t('maint_interval'), t('maint_lastdone'), t('maint_nextdue'), t('maint_status')]);
+    const body = rows.map(r=>(multi?[r.genName]:[]).concat([r.group, r.interval, r.lastDone, r.due, r.remaining]));
+    const bad  = rows.map(r=>(multi?[false]:[]).concat([false,false,false,false, r.state==='over']));
     const over = rows.filter(r=>r.state==='over').length;
     const soon = rows.filter(r=>r.state==='soon').length;
     return { type, headers, body, bad,
       title: bi ? 'تقرير الصيانة الدورية · Scheduled Maintenance Report' : 'Scheduled Maintenance Report',
-      subject: g?g.name:'', client: g?g.client:'',
+      subject: reportSubjectLabel(), client: reportClientLabel(),
       period: bi ? 'حتى تاريخه' : 'As of today', landscape: false,
       summary: `${bi?'متأخر':'Overdue'}: ${over} · ${bi?'قريبًا':'Due soon'}: ${soon}`,
       empty: rows.length===0 };
   }
 
   if(type==='svclog'){
-    const all = STATE.reportGenId==='__all__';
-    const rows = svcLogRows(STATE.reportGenId);
+    const all = reportIsMultiGen();
+    const rows = svcLogRows(selectedReportGenIds());
     const hasCF = customFieldsFor('service').length > 0;
     const headers = [t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('svc_kind'), t('svc_interval'), t('svc_hours_at'), t('corr_by'), t('svc_backfilled')])
@@ -2270,15 +2373,15 @@ function buildReportTable(){
     const bad = rows.map(()=> headers.map(()=>false));
     return { type, headers, body, bad,
       title: bi ? 'سجل الصيانات المنفّذة · Service History Report' : 'Service History Report',
-      subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
+      subject: reportSubjectLabel(), client: reportClientLabel(),
       period: reportPeriodLabel(), landscape: true,
       summary: `${bi?'عدد الصيانات المنفّذة':'Services performed'}: ${rows.length}`,
       empty: rows.length===0 };
   }
 
   if(type==='corr'){
-    const all = STATE.reportGenId==='__all__';
-    const rows = corrReportRows(STATE.reportGenId);
+    const all = reportIsMultiGen();
+    const rows = corrReportRows(selectedReportGenIds());
     const hasCF = customFieldsFor('corrective').length > 0;
     const headers = [t('corr_fault_id'), t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
@@ -2302,7 +2405,7 @@ function buildReportTable(){
     const dt = Math.round(rows.reduce((s2,c)=>s2+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
     return { type, headers, body, bad,
       title: bi ? 'تقرير الصيانة التصحيحية والإصلاحات · Corrective Maintenance Report' : 'Corrective Maintenance Report',
-      subject: all ? t('rep_all_gens') : (g?g.name:''), client: all ? '' : (g?g.client:''),
+      subject: reportSubjectLabel(), client: reportClientLabel(),
       period: reportPeriodLabel(), landscape: true,
       summary: `${bi?'عدد السجلات':'Records'}: ${rows.length} · ${t('corr_st_open')}: ${openN} · ${t('corr_downtime')}: ${dt}`,
       empty: rows.length===0 };
@@ -2639,6 +2742,77 @@ const FAULT_REPORT_CSS = `
     .itbl .num{text-align:end;white-space:nowrap;}
     .itbl .lref{color:#6B7280;font-size:10px;}
 `;
+
+/* One printable file holding the FULL corrective report form for every record in the
+   period — exactly the layout the Corrective tab prints for a single record, repeated,
+   each starting on a new page. */
+function correctivePackHtml(records){
+  return records.map((c,i)=>
+    `<div class="packpage"${i===records.length-1?' style="page-break-after:auto;"':''}>${faultReportBody(c)}</div>`
+  ).join('');
+}
+
+const CORR_PACK_CSS = FAULT_REPORT_CSS + `
+    .packpage{page-break-after:always;}
+    .packpage:last-child{page-break-after:auto;}
+`;
+
+// Records for the pack, oldest first so the pack reads chronologically.
+function correctivePackRecords(){
+  return corrReportRows(selectedReportGenIds())
+    .slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+}
+
+function printCorrectivePack(){
+  const records = correctivePackRecords();
+  if(!records.length){ showToast(t('warn_nothing')); return; }
+  const bi = STATE.lang==='ar';
+  const html = `<!DOCTYPE html><html lang="${bi?'ar':'en'}" dir="${bi?'rtl':'ltr'}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('corr_report_title')}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm; }
+    ${CORR_PACK_CSS}
+    @media print{.noprint{display:none;}}
+    .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;z-index:9;}
+  </style></head><body>
+    <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
+    ${correctivePackHtml(records)}
+    <script>setTimeout(function(){window.print();}, 500);<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ showToast(bi?'⚠️ اسمح بالنوافذ المنبثقة':'⚠️ Allow pop-ups to export PDF'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  showToast(t('rep_pack_done',{n:records.length}));
+}
+
+function exportCorrectivePackWord(){
+  const records = correctivePackRecords();
+  if(!records.length){ showToast(t('warn_nothing')); return; }
+  const bi = STATE.lang==='ar';
+  const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40" lang="${bi?'ar':'en'}" dir="${bi?'rtl':'ltr'}"><head><meta charset="utf-8">
+  <title>EnvironmSafe — ${t('corr_report_title')}</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+  <style>
+    @page Section1 { size: 21cm 29.7cm; margin: 2cm; }
+    div.Section1 { page: Section1; }
+    ${CORR_PACK_CSS}
+  </style></head><body>
+    <div class="Section1">${correctivePackHtml(records)}</div>
+  </body></html>`;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const per = STATE.reportMode==='day' ? STATE.reportDay : `${STATE.reportFrom}_to_${STATE.reportTo}`;
+  a.download = `EnvironmSafe_Corrective_Reports_${per}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t('rep_pack_done',{n:records.length}));
+}
 
 function printFaultReport(id){
   const c = STATE.corrective.find(x=>x.id===id);

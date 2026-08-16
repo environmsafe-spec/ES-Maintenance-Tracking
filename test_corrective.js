@@ -152,6 +152,44 @@ function run(sb,c){return vm.runInContext(c,sb);}
   const rtE = run(sb,'buildReportTable()');
   check('empty flag set when no rows', rtE.empty===true && rtE.body.length===0);
 
+  console.log('\n=== Combined corrective report pack (Reports tab) ===');
+  run(sb,`STATE.lang='en'; STATE.reportType='corr'; STATE.reportMode='range';
+          STATE.reportFrom='2026-06-01'; STATE.reportTo='2026-07-31';
+          STATE.reportGenIds=['g1','g2'];`);
+  let pack = run(sb,'correctivePackRecords()');
+  check('the pack covers both generators', pack.length===3, 'got '+pack.length);
+  check('the pack is ordered oldest first',
+        pack[0].date <= pack[1].date && pack[1].date <= pack[2].date,
+        pack.map(c=>c.date).join(' , '));
+  run(sb,`STATE.reportGenIds=['g1'];`);
+  pack = run(sb,'correctivePackRecords()');
+  check('narrowing to one generator narrows the pack', pack.length===2, 'got '+pack.length);
+  check('and only that generator appears', pack.every(c=>c.genId==='g1'));
+  run(sb,`STATE.reportFrom='2020-01-01'; STATE.reportTo='2020-01-31';`);
+  check('a period with no records gives an empty pack', run(sb,'correctivePackRecords().length')===0);
+  run(sb,`STATE.reportFrom='2026-06-01'; STATE.reportTo='2026-07-31'; STATE.reportGenIds=['g1','g2'];`);
+
+  const packHtml = run(sb,'correctivePackHtml(correctivePackRecords())');
+  const single = run(sb,`faultReportBody(STATE.corrective.find(c=>c.id==='c1'))`);
+  check('the pack reuses the exact single-record form',
+        packHtml.indexOf(single) >= 0, 'single-record body not found verbatim inside the pack');
+  check('each record starts on a new page',
+        (packHtml.match(/class="packpage"/g)||[]).length===3,
+        String((packHtml.match(/class="packpage"/g)||[]).length));
+  check('the last record does not force a trailing blank page',
+        packHtml.indexOf('page-break-after:auto') > 0);
+  check('the pack CSS defines the page break',
+        run(sb,'CORR_PACK_CSS').indexOf('page-break-after:always')>=0);
+  check('every record in the period is present',
+        ['Coolant leak','Air filter change','No start'].every(d=>packHtml.indexOf(d)>=0));
+
+  run(sb,'exportCorrectivePackWord()');
+  const packDoc = run(sb,'__blob') ? run(sb,'__blob').content : '';
+  check('the Word pack is a real document', packDoc.indexOf('<html')>=0 && packDoc.indexOf('Section1')>=0);
+  check('the Word pack holds all three reports',
+        (packDoc.match(/class="packpage"/g)||[]).length===3,
+        String((packDoc.match(/class="packpage"/g)||[]).length));
+
   console.log('\n=== Serial fault IDs (Cor-813, Cor-814, ...) ===');
   run(sb,`STATE.corrective = [];`);
   check('first fault ID starts at Cor-813', run(sb,`FAULT_ID_PREFIX + nextFaultSeq()`)==='Cor-813');

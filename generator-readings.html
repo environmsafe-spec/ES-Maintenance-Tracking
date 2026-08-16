@@ -537,6 +537,9 @@ const I18N = {
     corr_fault_id:'رقم التصحيحية', corr_short_desc:'وصف مختصر',
     corr_backfill_notice:'{n} سجل تصحيحي قديم بدون رقم بعد.', corr_backfill_btn:'تعيين الأرقام التصحيحية الآن',
     corr_backfill_done:'✅ تم تعيين {n} رقم تصحيحي',
+    corr_pack_title:'تقارير الصيانة التصحيحية',
+    corr_pack_count:'عدد التقارير', corr_pack_index:'فهرس التقارير',
+    corr_pack_note:'يحتوي هذا الملف على التقرير الرسمي الكامل لكل سجل مدرج أعلاه، بالترتيب نفسه، كل تقرير في صفحة مستقلة.',
     corr_causes:'الأسباب', corr_photos:'صور (اختياري)', corr_photos_add:'+ إضافة صور',
     corr_photo_remove:'حذف', corr_photo_limit:'⚠️ الحد الأقصى {n} صور لكل سجل تصحيحي',
     corr_photo_toobig:'⚠️ حجم الصور كبير جدًا — احذف صورة وحاول مجددًا',
@@ -756,6 +759,9 @@ const I18N = {
     corr_fault_id:'Corrective ID', corr_short_desc:'Short description',
     corr_backfill_notice:'{n} old corrective(s) don’t have a Corrective ID yet.', corr_backfill_btn:'Assign Corrective IDs now',
     corr_backfill_done:'✅ Assigned {n} Corrective ID(s)',
+    corr_pack_title:'Corrective Maintenance Reports',
+    corr_pack_count:'Number of reports', corr_pack_index:'Index of reports',
+    corr_pack_note:'This file contains the full official report for each record listed above, in the same order, each starting on its own page.',
     corr_causes:'Causes', corr_photos:'Photos (optional)', corr_photos_add:'+ Add photos',
     corr_photo_remove:'Remove', corr_photo_limit:'⚠️ Max {n} photos per corrective',
     corr_photo_toobig:'⚠️ Photos too large — remove one and try again',
@@ -2747,14 +2753,93 @@ const FAULT_REPORT_CSS = `
    period — exactly the layout the Corrective tab prints for a single record, repeated,
    each starting on a new page. */
 function correctivePackHtml(records){
-  return records.map((c,i)=>
+  return correctivePackCover(records) + records.map((c,i)=>
     `<div class="packpage"${i===records.length-1?' style="page-break-after:auto;"':''}>${faultReportBody(c)}</div>`
   ).join('');
+}
+
+// Cover sheet for the pack: what is inside, for which machines and period, plus an index
+// of every report that follows so the reader can find one without leafing through.
+function correctivePackCover(records){
+  const bi = STATE.lang==='ar';
+  const loc = bi ? 'ar' : undefined;
+  const dstr = d => d ? new Date(d+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '–';
+  const field = (label, value) => `
+    <div class="fld"><span class="fl">${label}</span><span class="fv">${value===undefined||value===null||value===''?'–':escHtml(String(value))}</span></div>`;
+
+  const openN = records.filter(c=>c.status && c.status!=='closed').length;
+  const downtime = Math.round(records.reduce((a,c)=>a+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
+  const billable = round2(records.reduce((a,c)=>a+faultBillableTotal(c),0));
+
+  const rows = records.map((c,i)=>{
+    const g = genById(c.genId);
+    return `<tr>
+      <td class="num">${i+1}</td>
+      <td>${escHtml(c.faultId || '–')}</td>
+      <td>${dstr(c.date)}</td>
+      <td>${escHtml(g ? g.name : '–')}</td>
+      <td>${escHtml(c.shortDescription || c.description || '')}</td>
+      <td>${corrSevLabel(c.severity||'low')}</td>
+      <td>${corrStatusLabel(c.status||'open')}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="packpage packcover">
+    <div class="hdr">
+      <img src="${REPORT_LOGO_B64}" alt="logo">
+      <div>
+        <div class="t">${t('corr_pack_title')}</div>
+        <div class="s">EnvironmSafe — Engineering, Trading &amp; Services Ltd.  ·  +967 78 340 2932  ·  www.environmsafe.com</div>
+      </div>
+    </div>
+    <div class="fldgrid">
+      ${field(t('rep_client_label'), reportClientLabel())}
+      ${field(t('rep_gen_label'), reportSubjectLabel())}
+      ${field(t('rep_period_label'), reportPeriodLabel())}
+      ${field(t('corr_pack_count'), records.length)}
+      ${field(t('corr_st_open'), openN)}
+      ${field(t('corr_st_closed'), records.length - openN)}
+      ${field(t('corr_downtime'), downtime)}
+      ${field(t('corr_billable_total')+' ('+billingCurrency()+')', moneyNum(billable))}
+      ${field(t('rep_printed'), new Date().toLocaleDateString(loc))}
+    </div>
+    <div class="blk">
+      <div class="bl">${t('corr_pack_index')}</div>
+      <div class="bv" style="padding:0;">
+        <table class="itbl" style="margin:0;">
+          <thead><tr>
+            <th class="num">#</th><th>${t('corr_fault_id')}</th><th>${t('corr_date')}</th>
+            <th>${t('corr_gen')}</th><th>${t('corr_short_desc')}</th>
+            <th>${t('corr_sev')}</th><th>${t('corr_status')}</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="covernote">${t('corr_pack_note')}</div>
+    <div class="signrow">
+      <div class="signbox">
+        <div class="signtitle">${t('corr_sign_eng')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+      <div class="signbox">
+        <div class="signtitle">${t('corr_sign_client')}</div>
+        <div class="signline">${t('sign_name')}: ______________________</div>
+        <div class="signline">${t('sign_signature')}: ______________________</div>
+        <div class="signline">${t('sign_date')}: ______________________</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 const CORR_PACK_CSS = FAULT_REPORT_CSS + `
     .packpage{page-break-after:always;}
     .packpage:last-child{page-break-after:auto;}
+    .packcover .hdr{margin-bottom:18px;}
+    .packcover .hdr .t{font-size:22px;}
+    .covernote{margin-top:14px;font-size:10.5px;color:#6B7280;}
 `;
 
 // Records for the pack, oldest first so the pack reads chronologically.

@@ -173,9 +173,9 @@ function run(sb,c){return vm.runInContext(c,sb);}
   const single = run(sb,`faultReportBody(STATE.corrective.find(c=>c.id==='c1'))`);
   check('the pack reuses the exact single-record form',
         packHtml.indexOf(single) >= 0, 'single-record body not found verbatim inside the pack');
-  check('each record starts on a new page',
-        (packHtml.match(/class="packpage"/g)||[]).length===3,
-        String((packHtml.match(/class="packpage"/g)||[]).length));
+  check('a cover sheet plus one page per record',
+        (packHtml.match(/class="packpage/g)||[]).length===4,
+        String((packHtml.match(/class="packpage/g)||[]).length));
   check('the last record does not force a trailing blank page',
         packHtml.indexOf('page-break-after:auto') > 0);
   check('the pack CSS defines the page break',
@@ -186,9 +186,36 @@ function run(sb,c){return vm.runInContext(c,sb);}
   run(sb,'exportCorrectivePackWord()');
   const packDoc = run(sb,'__blob') ? run(sb,'__blob').content : '';
   check('the Word pack is a real document', packDoc.indexOf('<html')>=0 && packDoc.indexOf('Section1')>=0);
-  check('the Word pack holds all three reports',
-        (packDoc.match(/class="packpage"/g)||[]).length===3,
-        String((packDoc.match(/class="packpage"/g)||[]).length));
+  check('the Word pack holds the cover plus all three reports',
+        (packDoc.match(/class="packpage/g)||[]).length===4,
+        String((packDoc.match(/class="packpage/g)||[]).length));
+
+  console.log('\n=== Pack cover sheet ===');
+  const cover = run(sb,'correctivePackCover(correctivePackRecords())');
+  check('the cover comes first in the pack', packHtml.indexOf(cover)===0);
+  check('the cover is titled for the whole pack', cover.indexOf('Corrective Maintenance Reports')>=0);
+  const coverField = (label, value) =>
+    cover.indexOf('<span class="fl">'+label+'</span><span class="fv">'+value+'</span>') >= 0;
+  check('the cover states how many reports follow', coverField('Number of reports', 3));
+  check('the cover carries the period', cover.indexOf(run(sb,'reportPeriodLabel()'))>=0);
+  check('the cover names the generators covered', cover.indexOf(run(sb,'reportSubjectLabel()'))>=0);
+  check('the cover indexes every record',
+        ['Coolant leak','Air filter change','No start'].every(d=>cover.indexOf(d)>=0));
+  check('the cover counts open records', coverField('Open', 2), 'expected 2 open');
+  check('the cover counts closed records', coverField('Closed', 1), 'expected 1 closed');
+  check('the cover totals the downtime', coverField('Downtime (hrs)', 12.5), 'expected 3.5 + 1 + 8');
+  check('the cover totals the billable value',
+        cover.indexOf(run(sb,'moneyNum(correctivePackRecords().reduce((a,c)=>a+faultBillableTotal(c),0))'))>=0);
+  check('the cover has both signature blocks',
+        cover.indexOf('EnvironmSafe Engineer')>=0 && cover.indexOf('Client Supervisor')>=0);
+  check('an empty pack is never printed', run(sb,`(function(){
+          var f=STATE.reportFrom, t2=STATE.reportTo;
+          STATE.reportFrom='2020-01-01'; STATE.reportTo='2020-01-02';
+          var n=correctivePackRecords().length;
+          STATE.reportFrom=f; STATE.reportTo=t2; return n; })()`)===0);
+  check('cover labels exist in both languages',
+        run(sb,`['corr_pack_title','corr_pack_count','corr_pack_index','corr_pack_note']
+                 .every(k=>!!I18N.en[k] && !!I18N.ar[k])`)===true);
 
   console.log('\n=== Serial fault IDs (Cor-813, Cor-814, ...) ===');
   run(sb,`STATE.corrective = [];`);

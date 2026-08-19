@@ -24,7 +24,7 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 - The Netlify site is Git-connected to this repo's `main` branch (via `netlify.toml`'s build command, which copies `generator-readings.html` → `index.html`). Pushing to `main` auto-deploys — no manual drag-and-drop needed anymore.
 
 ## Tabs / features (8 tabs)
-1. **New** — reading entry (grouped: core / voltage / current / engine-fluids / notes). Out-of-range values flagged.
+1. **New** — reading entry (grouped: core / voltage / current / engine-fluids / notes). Out-of-range values flagged. **Duplicate guard:** before saving, `duplicateReadingWarning()` looks for a reading already on file for the same generator within 12 hours — or with almost the same running hours on the same calendar day — and asks the user to confirm. The same guard runs on the Corrective tab (`duplicateCorrectiveWarning()`: same generator, within 3 days, descriptions sharing ≥60% of their words). It never blocks a save; it only asks.
 2. **History** — past readings, filterable, out-of-range highlighting.
 3. **Reports** — six report types, each exportable to branded A4 **PDF** (print-window), **Excel** (SheetJS) and **CSV**:
    readings, scheduled maintenance, service history, correctives & repairs, fleet summary, invoices. Plus a **full data backup** button (all collections → one xlsx, 8 sheets).
@@ -88,14 +88,18 @@ Node test suites live alongside the HTML (they extract the inline `<script>` and
 - `test_corrective.js` — corrective events + the four report builders
 - `test_svclog.js` — service history log, all-generators reports, backup
 - `test_labels_customfields.js` — label-override precedence in `t()`, label categorization, custom-field definitions/filtering/rendering/collection, and their flow into report exports
+- `test_duplicates.js` — the duplicate guard: text comparison (incl. Arabic diacritics), what counts as a near-duplicate reading or corrective record, the confirm message in both languages, and records saved before the feature existed
 - `test_billing.js` — price list, corrective vs routine rates, fault/service billable totals, service-visit grouping (nesting billed once), editable quantities, scope (services/goods/both) and summary grouping, invoice numbering/totals/discount/balance, payment status transitions, overdue detection, double-billing protection, receivables summary, bank + header fields on the document, backward compatibility with pre-billing records, and the report/backup exports
 - `simulate_firestore.js` — auth, two-device sync, permission-denied diagnostics
 
-Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields test_billing; do node $f.js; done`
+Run all: `for f in simulate_firestore test_reports test_maint test_duedate test_corrective test_svclog test_labels_customfields test_billing test_duplicates; do node $f.js; done`
 (The suites read `/home/claude/generator-readings.html`; symlink it there if your checkout lives elsewhere.)
 All suites must print `0 failed`. If you add a feature, add tests for it.
 
 For UI changes, a Playwright headless check at 412×892 (mock Firebase, since the real one is network-gated in CI) catches overflow/console errors. See `firebase_mock_init.js` for the seed/mock.
+
+## Privacy
+Both GitHub repositories are **private**. Never commit real bank account numbers, customer account details, or any other confidential figure — not in the app, not in the test files. Tests use obviously fake placeholders (`Bank One` / `1111111111`). Real bank details are entered by the user in Setup → Billing and live only in Firestore (`settings/billing`).
 
 ## Deploy
 1. Commit the updated `generator-readings.html` (and `netlify.toml` if it changes) to `main` and push.

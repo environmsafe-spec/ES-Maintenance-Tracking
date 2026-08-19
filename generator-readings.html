@@ -694,6 +694,10 @@ const I18N = {
     saved:'✅ تم حفظ القراءة', saved_flags:'✅ تم الحفظ — ⚠️ {n} خارج النطاق',
     save_queued:'⚠️ سيتم المزامنة عند الاتصال. اضغط إعادة المحاولة إذا تكرر.',
     warn_tech:'⚠️ أدخل اسم الفني', warn_datetime:'⚠️ حدّد التاريخ والوقت', warn_hours:'⚠️ أدخل ساعات التشغيل',
+    dup_reading_warn:'⚠️ توجد قراءة مشابهة محفوظة بالفعل لـ {gen}:\n{when} · {hours} ساعة · {by}',
+    dup_corr_warn:'⚠️ يوجد سجل صيانة تصحيحية مشابه محفوظ بالفعل لـ {gen}:\n{ref} · {when}\n{desc}',
+    dup_more:'\n(ويوجد {n} إدخال قريب آخر)',
+    dup_continue:'\n\nهل تريد المتابعة والحفظ على أي حال؟',
     all:'الكل', reading_count:'{n} قراءة', export_csv:'⬇ تصدير CSV', by:'بواسطة',
     hours:'ساعات', voltage_l1:'الجهد L1', coolant_c:'المبرّد °م', battery_v:'البطارية فولت', fuel_pct:'الوقود %', load_kw:'الحِمل ك.و',
     out_of_range:'⚠️ خارج النطاق: {list}', view_all:'عرض جميع القراءات', delete_reading:'حذف هذه القراءة',
@@ -916,6 +920,10 @@ const I18N = {
     saved:'✅ Reading saved', saved_flags:'✅ Saved — ⚠️ {n} out of range',
     save_queued:'⚠️ Save queued — will sync once connected. Tap Retry if this repeats.',
     warn_tech:'⚠️ Enter technician name', warn_datetime:'⚠️ Set date & time', warn_hours:'⚠️ Enter running hours',
+    dup_reading_warn:'⚠️ A similar reading is already saved for {gen}:\n{when} · {hours} h · {by}',
+    dup_corr_warn:'⚠️ A similar corrective record is already saved for {gen}:\n{ref} · {when}\n{desc}',
+    dup_more:'\n(and {n} other close entry/entries)',
+    dup_continue:'\n\nDo you want to continue and save it anyway?',
     all:'All', reading_count:'{n} reading(s)', export_csv:'⬇ Export CSV', by:'By',
     hours:'Hours', voltage_l1:'Voltage L1', coolant_c:'Coolant °C', battery_v:'Battery V', fuel_pct:'Fuel %', load_kw:'Load kW',
     out_of_range:'⚠️ Out of range: {list}', view_all:'View all readings', delete_reading:'Delete this reading',
@@ -1078,6 +1086,115 @@ function outOfRangeKeys(r){
     if((min!==null && num<min) || (max!==null && num>max)) bad.add(key);
   });
   return bad;
+}
+
+/* ---------------- Duplicate guard ----------------
+   Before a new daily entry is saved we look for one that is already in the system
+   for the same generator at nearly the same moment, so a double tap, a lost
+   connection retry, or two technicians entering the same visit is caught. Nothing
+   is ever blocked: the user is told what looks similar and decides. */
+const DUP_READING_WINDOW_HRS = 12;   // same generator, entered within 12 hours
+const DUP_READING_HOURS_DELTA = 2;   // ... or almost the same running hours, same day
+const DUP_CORR_WINDOW_DAYS = 3;      // corrective records within 3 days of each other
+const DUP_TEXT_MATCH = 0.6;          // share of words two descriptions must have in common
+
+function sameLocalDay(aMs, bMs){
+  const a = new Date(aMs), b = new Date(bMs);
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+
+// Lower-case, strip Arabic diacritics and punctuation, so wording differences don't hide a duplicate.
+function normText(s){
+  return String(s==null?'':s).toLowerCase()
+    .replace(/[ً-ٰٟ]/g,'')
+    .replace(/[^0-9a-zء-ي]+/g,' ')
+    .trim();
+}
+
+// 0..1 — share of words the two texts have in common (of the longer one).
+function textSimilarity(a, b){
+  const A = normText(a).split(' ').filter(Boolean);
+  const B = normText(b).split(' ').filter(Boolean);
+  if(!A.length || !B.length) return 0;
+  const setB = new Set(B);
+  let hit = 0;
+  A.forEach(w=>{ if(setB.has(w)) hit++; });
+  return hit / Math.max(A.length, B.length);
+}
+
+// Readings already saved that look like the one being entered, closest first.
+function similarReadings(reading, list){
+  list = list || STATE.readings || [];
+  const t0 = new Date(reading.timestamp).getTime();
+  if(isNaN(t0)) return [];
+  const h0 = (reading.hours===''||reading.hours===null||reading.hours===undefined) ? null : parseFloat(reading.hours);
+  return list.filter(r=>{
+    if(!r || r.genId !== reading.genId) return false;
+    if(reading.id && r.id === reading.id) return false;   // editing: never match itself
+    const t1 = new Date(r.timestamp).getTime();
+    if(isNaN(t1)) return false;
+    if(Math.abs(t1 - t0) <= DUP_READING_WINDOW_HRS*3600*1000) return true;
+    // Running hours barely move on a generator that is idle, so equal hours only
+    // count as a duplicate when it is the same calendar day.
+    const h1 = (r.hours===''||r.hours===null||r.hours===undefined) ? null : parseFloat(r.hours);
+    if(h0===null || h1===null || isNaN(h0) || isNaN(h1)) return false;
+    return Math.abs(h1 - h0) <= DUP_READING_HOURS_DELTA && sameLocalDay(t0, t1);
+  }).sort((a,b)=> Math.abs(new Date(a.timestamp).getTime()-t0) - Math.abs(new Date(b.timestamp).getTime()-t0));
+}
+
+// Corrective records already saved that look like the one being entered, closest first.
+function similarCorrectives(rec, list){
+  list = list || STATE.corrective || [];
+  const t0 = new Date((rec.date||'')+'T00:00:00').getTime();
+  // The same complaint may be written in the short line by one technician and in the
+  // full description by another, so compare each field with its counterpart and with
+  // the two joined, and take the best score.
+  const score = (a, b)=> Math.max(
+    textSimilarity(a.shortDescription, b.shortDescription),
+    textSimilarity(a.description, b.description),
+    textSimilarity((a.shortDescription||'')+' '+(a.description||''),
+                   (b.shortDescription||'')+' '+(b.description||''))
+  );
+  return list.filter(c=>{
+    if(!c || c.genId !== rec.genId) return false;
+    if(rec.id && c.id === rec.id) return false;
+    const t1 = new Date((c.date||'')+'T00:00:00').getTime();
+    if(!isNaN(t0) && !isNaN(t1) && Math.abs(t1-t0) > DUP_CORR_WINDOW_DAYS*86400000) return false;
+    return score(rec, c) >= DUP_TEXT_MATCH;
+  }).sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
+}
+
+// The confirm() text for a near-duplicate reading — '' when nothing looks similar.
+function duplicateReadingWarning(reading, list){
+  const dups = similarReadings(reading, list);
+  if(!dups.length) return '';
+  const d = dups[0];
+  const g = genById(reading.genId);
+  const hrs = (d.hours===''||d.hours===null||d.hours===undefined) ? '—' : d.hours;
+  let msg = t('dup_reading_warn', {
+    gen: g ? g.name : t('unknown'),
+    when: fmtDateShort(d.timestamp),
+    hours: hrs,
+    by: d.tech || '—'
+  });
+  if(dups.length > 1) msg += t('dup_more', { n: dups.length - 1 });
+  return msg + t('dup_continue');
+}
+
+// The confirm() text for a near-duplicate corrective record — '' when nothing looks similar.
+function duplicateCorrectiveWarning(rec, list){
+  const dups = similarCorrectives(rec, list);
+  if(!dups.length) return '';
+  const d = dups[0];
+  const g = genById(rec.genId);
+  let msg = t('dup_corr_warn', {
+    gen: g ? g.name : t('unknown'),
+    ref: d.faultId || '—',
+    when: d.date || '—',
+    desc: (d.shortDescription || d.description || '').slice(0,120)
+  });
+  if(dups.length > 1) msg += t('dup_more', { n: dups.length - 1 });
+  return msg + t('dup_continue');
 }
 
 // Filter readings for a generator within the currently-selected report period.
@@ -1417,6 +1534,10 @@ async function bindNewForm(){
       customFields: collectCustomFieldValues('reading', 'f'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
+
+    // A close match already on file? Tell the user and let them decide.
+    const dupMsg = duplicateReadingWarning(reading);
+    if(dupMsg && !confirm(dupMsg)) return;
 
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.disabled = true;
@@ -3757,6 +3878,8 @@ function bindCorrective(){
       customFields: collectCustomFieldValues('corrective', 'c'),
       savedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+    const dupMsg = duplicateCorrectiveWarning(rec);
+    if(dupMsg && !confirm(dupMsg)) return;
     saveBtn.disabled = true;
     try{
       await db.collection(CORR_COLLECTION).add(rec);

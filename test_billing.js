@@ -383,8 +383,8 @@ function run(sb,c){return vm.runInContext(c,sb);}
 
   console.log('\n=== Invoice header fields + bank details ===');
   run(sb,`STATE.billing={serviceRate:180,routineRate:22,currency:'USD',
-      bank1Name:'Alkuraimi Islamic Microfinance Bank',bank1Acct:'3108401426',
-      bank2Name:'AL Qutaibi Bank',bank2Acct:'436323641'};`);
+      bank1Name:'Bank One',bank1Acct:'1111111111',
+      bank2Name:'Bank Two',bank2Acct:'2222222222'};`);
   check('both banks are listed', run(sb,'bankAccounts().length')===2);
   check('a blank second bank is dropped',
         run(sb,`(function(){var b=STATE.billing;STATE.billing={bank1Name:'X',bank1Acct:'1'};var n=bankAccounts().length;STATE.billing=b;return n;})()`)===1);
@@ -398,10 +398,10 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('document shows the FRA/contract number', body.indexOf('FRA/CO/YE/2026/11')>=0);
   check('document shows the serial number', body.indexOf('SN-002')>=0);
   check('document shows the invoice date', body.indexOf('2026')>=0);
-  check('document shows the Alkuraimi account', body.indexOf('3108401426')>=0);
-  check('document shows the Al Qutaibi account', body.indexOf('436323641')>=0);
+  check('document shows the first account number', body.indexOf('1111111111')>=0);
+  check('document shows the second account number', body.indexOf('2222222222')>=0);
   check('document names both banks',
-        body.indexOf('Alkuraimi')>=0 && body.indexOf('Qutaibi')>=0);
+        body.indexOf('Bank One')>=0 && body.indexOf('Bank Two')>=0);
   let sBody = run(sb,`invoiceReportBody(STATE.invoices[0],'services','detailed')`);
   check('services-only document omits the goods line', sBody.indexOf('Oil filter')<0);
   check('services-only document keeps the service line', sBody.indexOf('Repair')>=0);

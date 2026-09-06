@@ -18,7 +18,8 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 
 ### Live URLs
 - App (primary/custom domain): https://environmsafe.com
-- App (Netlify subdomain): https://environmsafe-generators-daily.netlify.app/
+- App (branch URL, always works): https://main--environmsafe-generators-daily.netlify.app
+- NOTE: the bare `https://environmsafe-generators-daily.netlify.app/` is **no longer a usable address**. Once `environmsafe.com` was made the primary domain, Netlify stopped serving that subdomain directly and redirects it to the primary domain — the project's own `urls` list only contains the primary domain and the `main--` branch URL. Give people `environmsafe.com`.
 - Netlify deploys: app.netlify.com → site `environmsafe-generators-daily` → Deploys
 - Firestore rules: https://console.firebase.google.com/project/generators-readings/firestore/rules
 - The Netlify site is Git-connected to this repo's `main` branch (via `netlify.toml`'s build command, which copies `generator-readings.html` → `index.html`). Pushing to `main` auto-deploys — no manual drag-and-drop needed anymore.

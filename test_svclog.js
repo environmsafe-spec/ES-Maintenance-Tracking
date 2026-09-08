@@ -89,11 +89,11 @@ function run(sb,c){return vm.runInContext(c,sb);}
     STATE.reportFrom='2024-07-01'; STATE.reportTo='2026-07-31';`);
   rt = run(sb,'buildReportTable()');
   check('fleet fault report includes both generators', rt.body.length===2, 'got '+rt.body.length);
-  check('generator column present (16 base + 1)', rt.headers.length===17, 'got '+rt.headers.length);
-  check('severity flagged at shifted index', rt.bad.some(r=>r.indexOf(true)>=0), JSON.stringify(rt.bad));
+  check('generator column present (15 base + 1)', rt.headers.length===16, 'got '+rt.headers.length);
+  check('severity is not among the columns', rt.headers.indexOf('Severity')<0, JSON.stringify(rt.headers));
   run(sb,`STATE.reportGenId='g1';`);
   rt = run(sb,'buildReportTable()');
-  check('single-gen fault report has no generator column (16)', rt.headers.length===16, 'got '+rt.headers.length);
+  check('single-gen fault report has no generator column (15)', rt.headers.length===15, 'got '+rt.headers.length);
 
   console.log('\\n=== Service log is written when a service is performed ===');
   const before = run(sb,'__added.length');

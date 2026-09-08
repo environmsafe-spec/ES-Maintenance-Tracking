@@ -1964,7 +1964,6 @@ function renderCorrReport(){
   const body = rows.map(c=>`<tr>
       <td>${c.date? new Date(c.date+'T00:00:00').toLocaleDateString(loc):'—'}</td>
       <td>${corrTypeLabel(c.type||'other')}</td>
-      <td class="${(c.severity==='critical'||c.severity==='high')?'rp-bad':''}">${corrSevLabel(c.severity||'low')}</td>
       <td>${corrStatusLabel(c.status||'open')}</td>
       <td>${c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null?c.hoursAtEvent:'—'}</td>
       <td>${c.description||''}</td>
@@ -1982,7 +1981,7 @@ function renderCorrReport(){
     </div>
     <div class="rp-tablewrap">
       <table class="rp-table">
-        <thead><tr><th>${t('corr_date')}</th><th>${t('corr_type')}</th><th>${t('corr_sev')}</th><th>${t('corr_status')}</th><th>${t('corr_hours')}</th><th>${t('corr_desc')}</th><th>${t('corr_action')}</th><th>${t('corr_parts')}</th><th>${t('corr_downtime')}</th></tr></thead>
+        <thead><tr><th>${t('corr_date')}</th><th>${t('corr_type')}</th><th>${t('corr_status')}</th><th>${t('corr_hours')}</th><th>${t('corr_desc')}</th><th>${t('corr_action')}</th><th>${t('corr_parts')}</th><th>${t('corr_downtime')}</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>
@@ -2418,7 +2417,7 @@ function buildReportTable(){
     const rows = corrReportRows(selectedReportGenIds());
     const hasCF = customFieldsFor('corrective').length > 0;
     const headers = [t('corr_fault_id'), t('corr_date')].concat(all?[t('f_generator')]:[])
-      .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
+      .concat([t('corr_type'), t('corr_status'), t('corr_hours'),
                t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
       .concat(withMoney?[t('corr_billable_total')+' ('+billingCurrency()+')', t('inv_no')]:[])
       .concat(hasCF?[t('customfields_title')]:[]);
@@ -2426,15 +2425,14 @@ function buildReportTable(){
       const gg = genById(c.genId);
       return [c.faultId || c.id, c.date ? new Date(c.date+'T00:00:00').toLocaleDateString(loc) : '']
         .concat(all?[gg?gg.name:'']:[])
-        .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
+        .concat([corrTypeLabel(c.type||'other'), corrStatusLabel(c.status||'open'),
                  (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
                  c.shortDescription||'', c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
                  (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||''])
         .concat(withMoney?[moneyNum(faultBillableTotal(c)), (invoiceForSource('fault', c.id)||{}).invoiceNo || '']:[])
         .concat(hasCF?[customFieldsSummary('corrective', c.customFields)]:[]);
     });
-    const sevIdx = all ? 4 : 3;
-    const bad = rows.map(c=> headers.map((h,i)=> i===sevIdx && (c.severity==='critical'||c.severity==='high')));
+    const bad = rows.map(()=> headers.map(()=>false));
     const openN = rows.filter(c=>c.status && c.status!=='closed').length;
     const dt = Math.round(rows.reduce((s2,c)=>s2+(parseFloat(c.downtimeHrs)||0),0)*10)/10;
     return { type, headers, body, bad,
@@ -2693,7 +2691,6 @@ function faultReportBody(c, prices){
       ${field('Client', g?g.client:'–')}
       ${field(t('corr_date'), dstr)}
       ${field(t('corr_type'), corrTypeLabel(c.type||'other'))}
-      ${field(t('corr_sev'), corrSevLabel(c.severity||'low'))}
       ${field(t('corr_status'), corrStatusLabel(c.status||'open'))}
       ${field(t('corr_hours'), c.hoursAtEvent)}
       ${field(t('corr_downtime'), c.downtimeHrs)}
@@ -2707,15 +2704,9 @@ function faultReportBody(c, prices){
     ${block(t('corr_parts'), c.partsUsed)}
     ${faultBillingReportBlock(c, prices)}
     ${block(t('corr_recommend'), c.recommendations)}
-    <div class="signrow">
+    <div class="signrow single">
       <div class="signbox">
         <div class="signtitle">${t('corr_sign_eng')}</div>
-        <div class="signline">${t('sign_name')}: ______________________</div>
-        <div class="signline">${t('sign_signature')}: ______________________</div>
-        <div class="signline">${t('sign_date')}: ______________________</div>
-      </div>
-      <div class="signbox">
-        <div class="signtitle">${t('corr_sign_client')}</div>
         <div class="signline">${t('sign_name')}: ______________________</div>
         <div class="signline">${t('sign_signature')}: ______________________</div>
         <div class="signline">${t('sign_date')}: ______________________</div>
@@ -2782,6 +2773,7 @@ const FAULT_REPORT_CSS = `
     .bl{background:#1B2A4A;color:#fff;font-weight:700;font-size:11px;padding:5px 8px;}
     .bv{padding:8px;font-size:11.5px;min-height:32px;}
     .signrow{display:flex;gap:16px;margin-top:26px;}
+    .signrow.single .signbox{flex:0 0 48%;max-width:48%;}
     .signbox{flex:1;border-top:1px solid #1B2A4A;padding-top:8px;}
     .signtitle{font-weight:700;font-size:11.5px;color:#1B2A4A;margin-bottom:10px;}
     .signline{font-size:11px;margin-bottom:16px;}
@@ -2826,7 +2818,6 @@ function correctivePackCover(records, prices){
       <td>${dstr(c.date)}</td>
       <td>${escHtml(g ? g.name : '–')}</td>
       <td>${escHtml(c.shortDescription || c.description || '')}</td>
-      <td>${corrSevLabel(c.severity||'low')}</td>
       <td>${corrStatusLabel(c.status||'open')}</td>
     </tr>`;
   }).join('');
@@ -2857,22 +2848,16 @@ function correctivePackCover(records, prices){
           <thead><tr>
             <th class="num">#</th><th>${t('corr_fault_id')}</th><th>${t('corr_date')}</th>
             <th>${t('corr_gen')}</th><th>${t('corr_short_desc')}</th>
-            <th>${t('corr_sev')}</th><th>${t('corr_status')}</th>
+            <th>${t('corr_status')}</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     </div>
     <div class="covernote">${t('corr_pack_note')}</div>
-    <div class="signrow">
+    <div class="signrow single">
       <div class="signbox">
         <div class="signtitle">${t('corr_sign_eng')}</div>
-        <div class="signline">${t('sign_name')}: ______________________</div>
-        <div class="signline">${t('sign_signature')}: ______________________</div>
-        <div class="signline">${t('sign_date')}: ______________________</div>
-      </div>
-      <div class="signbox">
-        <div class="signtitle">${t('corr_sign_client')}</div>
         <div class="signline">${t('sign_name')}: ______________________</div>
         <div class="signline">${t('sign_signature')}: ______________________</div>
         <div class="signline">${t('sign_date')}: ______________________</div>

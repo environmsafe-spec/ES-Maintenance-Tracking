@@ -135,9 +135,12 @@ function run(sb,c){return vm.runInContext(c,sb);}
   console.log('\n=== Corrective report marks high/critical severity ===');
   run(sb,`STATE.reportType='corr'; STATE.reportGenId='g1'; STATE.reportFrom='2026-07-01'; STATE.reportTo='2026-07-31';`);
   const rtC = run(sb,'buildReportTable()');
-  const sevCol = 3;
-  check('high severity row flagged in bad-mask', rtC.bad[0][sevCol]===true, JSON.stringify(rtC.bad[0]));
-  check('low severity row not flagged', rtC.bad[1][sevCol]===false, JSON.stringify(rtC.bad[1]));
+  check('severity is not a column on the corrective report',
+        rtC.headers.indexOf('Severity')<0, JSON.stringify(rtC.headers));
+  check('no row is flagged now that severity has gone',
+        rtC.bad.every(r=>r.every(x=>x===false)), JSON.stringify(rtC.bad[0]));
+  check('severity is still stored on the record, just not printed',
+        run(sb,`STATE.corrective[0].severity`)==='high');
 
   console.log('\n=== CSV export works for a non-readings report ===');
   run(sb,`STATE.reportType='fleet'; exportReportCSV();`);
@@ -206,8 +209,12 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('the cover totals the downtime', coverField('Downtime (hrs)', 12.5), 'expected 3.5 + 1 + 8');
   check('the cover totals the billable value',
         cover.indexOf(run(sb,'moneyNum(correctivePackRecords().reduce((a,c)=>a+faultBillableTotal(c),0))'))>=0);
-  check('the cover has both signature blocks',
-        cover.indexOf('EnvironmSafe Engineer')>=0 && cover.indexOf('Client Supervisor')>=0);
+  check('the cover has the EnvironmSafe signature block',
+        cover.indexOf('EnvironmSafe Engineer')>=0);
+  check('the cover has no client supervisor signature',
+        cover.indexOf('Client Supervisor')<0);
+  check('the cover index has no severity column',
+        cover.indexOf('>Severity<')<0, 'severity column still on the cover');
   check('an empty pack is never printed', run(sb,`(function(){
           var f=STATE.reportFrom, t2=STATE.reportTo;
           STATE.reportFrom='2020-01-01'; STATE.reportTo='2020-01-02';

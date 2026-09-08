@@ -66,6 +66,8 @@ Every printed document takes a `prices` mode (`DOC_PRICE_MODES`, `showPrices(mod
 - **Invoice:** the money columns, the totals box, the bank block, the currency field and the payment terms all drop out, and the document is **retitled "Delivery / Work Note"** — an unpriced page headed "Invoice" would be misread by a client — while keeping the same document number, the items, the quantities and both signature blocks.
 - **Reports tab corrective table:** the billable-total and invoice-number columns drop from the PDF/Excel/CSV export.
 
+**Invoice dates are never auto-filled.** A new invoice starts with an empty `date`, the field is marked required and the save is refused without it (`inv_need_date`); opening an old invoice for editing does not invent a date it never had; and Record payment prompts for `paidDate` (offering today only as editable prompt text) instead of stamping today. `todayStr()` still legitimately drives the Reports-tab period defaults and the `dueDate` overdue comparison — do not reintroduce it into the invoice draft.
+
 Invoice header carries `orderNo`, `contractNo` (FRA/contract), `serialNo` and `ref` alongside the serial `invoiceNo`. Bank details for payment print at the foot of every document from `bankAccounts()` (`settings/billing.bank1Name/bank1Acct/bank2Name/bank2Acct`).
 
 Lines also carry `genId`/`genName` — that is what lets a summary invoice group by genset. Old lines without them still summarise (they fall into an unnamed group); never assume the field is present.

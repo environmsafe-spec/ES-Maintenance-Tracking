@@ -152,6 +152,34 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===373,
         run(sb,'linesSubtotal(STATE.invDraft.lines)'));
 
+  console.log('\n=== Invoice dates are typed, never assumed ===');
+  run(sb,`STATE.invDraft = blankInvoiceDraft();`);
+  check('a new invoice starts with an empty date', run(sb,'STATE.invDraft.date')==='',
+        JSON.stringify(run(sb,'STATE.invDraft.date')));
+  check('a new invoice starts with an empty due date', run(sb,'STATE.invDraft.dueDate')==='');
+  check('a new invoice starts with an empty payment date', run(sb,'STATE.invDraft.paidDate')==='');
+  check("today's date is not pre-filled anywhere on a blank draft",
+        JSON.stringify(run(sb,'blankInvoiceDraft()')).indexOf(run(sb,'todayStr()'))<0,
+        'a date field still defaults to today');
+  check('the missing-date warning exists in both languages',
+        run(sb,`!!I18N.en.inv_need_date && !!I18N.ar.inv_need_date`)===true);
+  check('the payment-date prompt exists in both languages',
+        run(sb,`!!I18N.en.inv_payment_date_prompt && !!I18N.ar.inv_payment_date_prompt`)===true);
+  check('the invoice date field is marked required',
+        run(sb,`(function(){STATE.invDraft=blankInvoiceDraft();return renderInvoiceBuilder();})()`)
+          .indexOf('<label class="req">'+run(sb,`t('inv_date')`)+'</label>')>=0,
+        'invoice date label is not marked required');
+  const draftHtml = run(sb,`(function(){STATE.invDraft=blankInvoiceDraft();return renderInvoiceBuilder();})()`);
+  check('the date input renders empty, not pre-filled',
+        draftHtml.indexOf('id="inv-date" value=""')>=0, 'date input is pre-filled');
+  check('an invoice with a typed date keeps exactly that date',
+        run(sb,`(function(){var d=blankInvoiceDraft();d.date='2026-07-31';return d.date;})()`)==='2026-07-31');
+  check('overdue still compares the due date against today',
+        run(sb,`invoiceIsOverdue({status:'sent',dueDate:'2020-01-01',lines:[{qty:1,unitPrice:10}]})`)===true);
+  check('an invoice with no date is never treated as overdue',
+        run(sb,`invoiceIsOverdue({status:'sent',dueDate:'',date:'',lines:[{qty:1,unitPrice:10}]})`)===false);
+  run(sb,`STATE.invDraft=null;`);
+
   console.log('\n=== Invoice numbering ===');
   check('first invoice number is the start seed', run(sb,'nextInvoiceSeq()')===1001, run(sb,'nextInvoiceSeq()'));
   run(sb,`STATE.invoices=[{id:'i1',invoiceSeq:1001,invoiceNo:'INV-1001',status:'sent',client:'FAO',date:'2026-08-14',lines:[]}];`);

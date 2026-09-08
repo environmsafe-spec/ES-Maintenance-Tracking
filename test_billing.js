@@ -152,15 +152,13 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('draft subtotal adds up', run(sb,'linesSubtotal(STATE.invDraft.lines)')===373,
         run(sb,'linesSubtotal(STATE.invDraft.lines)'));
 
-  console.log('\n=== Invoice dates are typed, never assumed ===');
+  console.log('\n=== Invoice dates: today by default, always changeable ===');
+  const today = run(sb,'todayStr()');
   run(sb,`STATE.invDraft = blankInvoiceDraft();`);
-  check('a new invoice starts with an empty date', run(sb,'STATE.invDraft.date')==='',
+  check("a new invoice opens with today's date", run(sb,'STATE.invDraft.date')===today,
         JSON.stringify(run(sb,'STATE.invDraft.date')));
   check('a new invoice starts with an empty due date', run(sb,'STATE.invDraft.dueDate')==='');
   check('a new invoice starts with an empty payment date', run(sb,'STATE.invDraft.paidDate')==='');
-  check("today's date is not pre-filled anywhere on a blank draft",
-        JSON.stringify(run(sb,'blankInvoiceDraft()')).indexOf(run(sb,'todayStr()'))<0,
-        'a date field still defaults to today');
   check('the missing-date warning exists in both languages',
         run(sb,`!!I18N.en.inv_need_date && !!I18N.ar.inv_need_date`)===true);
   check('the payment-date prompt exists in both languages',
@@ -170,10 +168,22 @@ function run(sb,c){return vm.runInContext(c,sb);}
           .indexOf('<label class="req">'+run(sb,`t('inv_date')`)+'</label>')>=0,
         'invoice date label is not marked required');
   const draftHtml = run(sb,`(function(){STATE.invDraft=blankInvoiceDraft();return renderInvoiceBuilder();})()`);
-  check('the date input renders empty, not pre-filled',
-        draftHtml.indexOf('id="inv-date" value=""')>=0, 'date input is pre-filled');
-  check('an invoice with a typed date keeps exactly that date',
+  check("the date input renders pre-filled with today",
+        draftHtml.indexOf('id="inv-date" value="'+today+'"')>=0, 'date input is not pre-filled with today');
+  check('the date input is an ordinary editable date field, not read-only',
+        draftHtml.indexOf('id="inv-date"')>=0
+        && draftHtml.slice(draftHtml.indexOf('id="inv-date"'), draftHtml.indexOf('id="inv-date"')+120)
+             .search(/readonly|disabled/i)<0,
+        'the invoice date field is locked');
+  check('a typed date replaces the default and is kept exactly',
         run(sb,`(function(){var d=blankInvoiceDraft();d.date='2026-07-31';return d.date;})()`)==='2026-07-31');
+  check('an invoice saved with an older date is reloaded with that date, not today',
+        run(sb,`(function(){var d=blankInvoiceDraft();d.date='2026-06-01';
+                 return renderInvoiceBuilder ? (STATE.invDraft=d, renderInvoiceBuilder()) : '';})()`)
+          .indexOf('id="inv-date" value="2026-06-01"')>=0,
+        'an existing invoice date was overwritten with today');
+  check('clearing the date is refused by the save guard, not silently re-filled',
+        run(sb,`(function(){var d=blankInvoiceDraft();d.date='';return !d.date;})()`)===true);
   check('overdue still compares the due date against today',
         run(sb,`invoiceIsOverdue({status:'sent',dueDate:'2020-01-01',lines:[{qty:1,unitPrice:10}]})`)===true);
   check('an invoice with no date is never treated as overdue',

@@ -4244,7 +4244,8 @@ function invoicesSorted(){
 function blankInvoiceDraft(){
   const clients = clientList();
   return {
-    id: null, client: clients[0] || '', genId: '', date: '', dueDate: '',
+    // Today is offered as a starting point only - the field stays fully editable.
+    id: null, client: clients[0] || '', genId: '', date: todayStr(), dueDate: '',
     ref: '', orderNo: '', contractNo: '', serialNo: '',
     notes: '', lines: [], discount: 0, status: 'draft', paidAmount: 0, paidDate: ''
   };

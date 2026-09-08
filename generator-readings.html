@@ -232,6 +232,7 @@
   .linetable .line-rm{background:none;border:none;color:var(--bad);font-size:15px;line-height:1;
     cursor:pointer;padding:2px 6px;min-height:32px;}
   .line-empty{font-size:12px;color:var(--muted);padding:8px 0;}
+  select.doc-prices{width:auto;margin:0;min-height:36px;padding:6px 8px;font-size:12px;}
   .cell-in{width:64px;padding:5px 6px;font-size:12px;text-align:end;margin:0;min-height:34px;}
   .issue-opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
   .issue-opts .io{flex:1;min-width:130px;}
@@ -381,6 +382,9 @@ const DEFAULT_CURRENCY = 'USD';
 // How an invoice document is issued: which lines it shows, and at what level of detail.
 const INVOICE_SCOPES = ['all','services','routine','corrective','goods'];
 const INVOICE_DETAILS = ['detailed','summary'];
+// Every printed document can be issued with money shown, or as an items-and-quantities
+// only version for the client's technical file.
+const DOC_PRICE_MODES = ['with','without'];
 const INVOICE_ID_PREFIX = 'INV-';
 const INVOICE_ID_START = 1001;
 const INVOICE_STATUS = ['draft','sent','partly_paid','paid','cancelled'];
@@ -608,6 +612,10 @@ const I18N = {
     inv_scope_routine:'خدمات الصيانة الدورية', inv_scope_corrective:'الصيانة التصحيحية',
     inv_scope_goods:'الأصناف فقط',
     inv_detail:'التفصيل', inv_detail_detailed:'تفصيلي', inv_detail_summary:'إجمالي',
+    doc_prices:'الأسعار', doc_prices_with:'بالأسعار', doc_prices_without:'بدون أسعار',
+    corr_items_used:'الأصناف والمواد المستخدمة',
+    inv_note_title:'مذكرة تسليم / أعمال',
+    inv_noprice_note:'هذه الوثيقة تبيّن الأصناف والكميات فقط، ولا تتضمن أي أسعار أو مبالغ.',
     inv_sum_corrective:'زيارات صيانة تصحيحية',
     inv_sum_routine:'زيارات صيانة دورية (250 ساعة)',
     inv_doc_subtotal:'إجمالي هذا الإصدار',
@@ -622,6 +630,7 @@ const I18N = {
     rep_gen_multi_hint:'اختر مولّدًا واحدًا أو أكثر.',
     rep_n_gens:'{n} مولّدات',
     rep_pack_hint:'ملف واحد يحتوي تقرير كل صيانة تصحيحية بنموذجها الرسمي الكامل، واحدًا تلو الآخر.',
+    rep_prices_hint:'يسري هذا الخيار على التقارير الكاملة وعلى تصدير الجدول أدناه.',
     rep_pack_pdf:'🖨️ تقارير كاملة PDF', rep_pack_word:'📄 تقارير كاملة Word',
     rep_pack_done:'✅ تم تجهيز {n} تقرير',
     rep_invoices:'الفواتير', rep_invoices_title:'تقرير الفواتير',
@@ -832,6 +841,10 @@ const I18N = {
     inv_scope_routine:'Scheduled maintenance services', inv_scope_corrective:'Corrective maintenance',
     inv_scope_goods:'Goods only',
     inv_detail:'Detail', inv_detail_detailed:'Detailed', inv_detail_summary:'Summary',
+    doc_prices:'Prices', doc_prices_with:'With prices', doc_prices_without:'Without prices',
+    corr_items_used:'Items and materials used',
+    inv_note_title:'Delivery / Work Note',
+    inv_noprice_note:'This document lists items and quantities only. No prices or amounts are shown.',
     inv_sum_corrective:'Corrective maintenance visits',
     inv_sum_routine:'Routine maintenance visits (250 h)',
     inv_doc_subtotal:'Total for this issue',
@@ -846,6 +859,7 @@ const I18N = {
     rep_gen_multi_hint:'Tick one or more generators.',
     rep_n_gens:'{n} generators',
     rep_pack_hint:'One file containing the full official report for every corrective record, one after the other.',
+    rep_prices_hint:'This choice applies to the full reports and to the table exports above.',
     rep_pack_pdf:'🖨️ Full reports PDF', rep_pack_word:'📄 Full reports Word',
     rep_pack_done:'✅ {n} report(s) prepared',
     rep_invoices:'Invoices', rep_invoices_title:'Invoices report',
@@ -1977,6 +1991,15 @@ function renderCorrReport(){
       <button class="btn btn-secondary" id="rp-xlsx" style="flex:1;min-width:110px;">${t('rep_xlsx')}</button>
     </div>
     <hr class="section-sep">
+    <div class="issue-opts" style="margin-top:0;">
+      <div class="io">
+        <label>${t('doc_prices')}</label>
+        <select data-rpprices>
+          ${DOC_PRICE_MODES.map(v=>`<option value="${v}">${docPriceLabel(v)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="hint" style="margin-bottom:6px;">${t('rep_prices_hint')}</div>
     <div class="hint" style="margin-bottom:6px;">${t('rep_pack_hint')}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-outline" id="rp-pack-pdf" style="flex:1;min-width:150px;">${t('rep_pack_pdf')}</button>
@@ -2225,9 +2248,9 @@ function bindReports(){
   const xlsxBtn = document.getElementById('rp-xlsx');
   if(xlsxBtn) xlsxBtn.addEventListener('click', exportReportXLSX);
   const packPdf = document.getElementById('rp-pack-pdf');
-  if(packPdf) packPdf.addEventListener('click', printCorrectivePack);
+  if(packPdf) packPdf.addEventListener('click', ()=>printCorrectivePack(reportPricesMode()));
   const packWord = document.getElementById('rp-pack-word');
-  if(packWord) packWord.addEventListener('click', exportCorrectivePackWord);
+  if(packWord) packWord.addEventListener('click', ()=>exportCorrectivePackWord(reportPricesMode()));
   const backupBtn = document.getElementById('rp-backup');
   if(backupBtn) backupBtn.addEventListener('click', exportFullBackup);
 }
@@ -2391,12 +2414,13 @@ function buildReportTable(){
 
   if(type==='corr'){
     const all = reportIsMultiGen();
+    const withMoney = showPrices(reportPricesMode());
     const rows = corrReportRows(selectedReportGenIds());
     const hasCF = customFieldsFor('corrective').length > 0;
     const headers = [t('corr_fault_id'), t('corr_date')].concat(all?[t('f_generator')]:[])
       .concat([t('corr_type'), t('corr_sev'), t('corr_status'), t('corr_hours'),
-               t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by'),
-               t('corr_billable_total')+' ('+billingCurrency()+')', t('inv_no')])
+               t('corr_short_desc'), t('corr_desc'), t('corr_causes'), t('corr_action'), t('corr_parts'), t('corr_downtime'), t('corr_recommend'), t('corr_by')])
+      .concat(withMoney?[t('corr_billable_total')+' ('+billingCurrency()+')', t('inv_no')]:[])
       .concat(hasCF?[t('customfields_title')]:[]);
     const body = rows.map(c=>{
       const gg = genById(c.genId);
@@ -2405,8 +2429,8 @@ function buildReportTable(){
         .concat([corrTypeLabel(c.type||'other'), corrSevLabel(c.severity||'low'), corrStatusLabel(c.status||'open'),
                  (c.hoursAtEvent!==undefined&&c.hoursAtEvent!==null)?c.hoursAtEvent:'',
                  c.shortDescription||'', c.description||'', c.causesOfFault||'', c.actionTaken||'', c.partsUsed||'',
-                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||'',
-                 moneyNum(faultBillableTotal(c)), (invoiceForSource('fault', c.id)||{}).invoiceNo || ''])
+                 (c.downtimeHrs!==undefined&&c.downtimeHrs!==null)?c.downtimeHrs:'', c.recommendations||'', c.by||''])
+        .concat(withMoney?[moneyNum(faultBillableTotal(c)), (invoiceForSource('fault', c.id)||{}).invoiceNo || '']:[])
         .concat(hasCF?[customFieldsSummary('corrective', c.customFields)]:[]);
     });
     const sevIdx = all ? 4 : 3;
@@ -2645,7 +2669,7 @@ function escHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
-function faultReportBody(c){
+function faultReportBody(c, prices){
   const g = genById(c.genId);
   const bi = STATE.lang==='ar';
   const loc = bi ? 'ar' : undefined;
@@ -2681,7 +2705,7 @@ function faultReportBody(c){
     ${block(t('corr_causes'), c.causesOfFault)}
     ${block(t('corr_action'), c.actionTaken)}
     ${block(t('corr_parts'), c.partsUsed)}
-    ${faultBillingReportBlock(c)}
+    ${faultBillingReportBlock(c, prices)}
     ${block(t('corr_recommend'), c.recommendations)}
     <div class="signrow">
       <div class="signbox">
@@ -2705,9 +2729,28 @@ function faultReportBody(c){
 }
 
 // Costed breakdown appended to the official fault report (skipped when nothing is chargeable).
-function faultBillingReportBlock(c){
+function faultBillingReportBlock(c, prices){
   const parts = faultPartsLines(c);
   const fee = faultServiceFee(c);
+
+  // Without prices this becomes a plain record of what was fitted: items and quantities
+  // only. The service fee is a money concept, so it drops out entirely - a report with
+  // no parts then has nothing to show and the block is omitted.
+  if(!showPrices(prices)){
+    if(!parts.length) return '';
+    const rowsNp = parts.map(p=>
+      `<tr><td>${escHtml(p.name||p.desc||'')}</td><td class="num">${parseFloat(p.qty)||0}</td></tr>`).join('');
+    return `<div class="blk">
+      <div class="bl">${t('corr_items_used')}</div>
+      <div class="bv" style="padding:0;">
+        <table class="itbl" style="margin:0;">
+          <thead><tr><th>${t('inv_line_desc')}</th><th class="num">${t('inv_line_qty')}</th></tr></thead>
+          <tbody>${rowsNp}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
   if(!parts.length && !fee) return '';
   const cur = billingCurrency();
   const rows = [`<tr><td>${t('corr_service_fee')}</td><td class="num">1</td><td class="num">${moneyNum(fee)}</td><td class="num">${moneyNum(fee)}</td></tr>`]
@@ -2756,15 +2799,15 @@ const FAULT_REPORT_CSS = `
 /* One printable file holding the FULL corrective report form for every record in the
    period — exactly the layout the Corrective tab prints for a single record, repeated,
    each starting on a new page. */
-function correctivePackHtml(records){
-  return correctivePackCover(records) + records.map((c,i)=>
-    `<div class="packpage"${i===records.length-1?' style="page-break-after:auto;"':''}>${faultReportBody(c)}</div>`
+function correctivePackHtml(records, prices){
+  return correctivePackCover(records, prices) + records.map((c,i)=>
+    `<div class="packpage"${i===records.length-1?' style="page-break-after:auto;"':''}>${faultReportBody(c, prices)}</div>`
   ).join('');
 }
 
 // Cover sheet for the pack: what is inside, for which machines and period, plus an index
 // of every report that follows so the reader can find one without leafing through.
-function correctivePackCover(records){
+function correctivePackCover(records, prices){
   const bi = STATE.lang==='ar';
   const loc = bi ? 'ar' : undefined;
   const dstr = d => d ? new Date(d+'T00:00:00').toLocaleDateString(loc,{year:'numeric',month:'short',day:'numeric'}) : '–';
@@ -2804,7 +2847,7 @@ function correctivePackCover(records){
       ${field(t('corr_st_open'), openN)}
       ${field(t('corr_st_closed'), records.length - openN)}
       ${field(t('corr_downtime'), downtime)}
-      ${field(t('corr_billable_total')+' ('+billingCurrency()+')', moneyNum(billable))}
+      ${showPrices(prices) ? field(t('corr_billable_total')+' ('+billingCurrency()+')', moneyNum(billable)) : ''}
       ${field(t('rep_printed'), new Date().toLocaleDateString(loc))}
     </div>
     <div class="blk">
@@ -2852,7 +2895,7 @@ function correctivePackRecords(){
     .slice().sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
 }
 
-function printCorrectivePack(){
+function printCorrectivePack(prices){
   const records = correctivePackRecords();
   if(!records.length){ showToast(t('warn_nothing')); return; }
   const bi = STATE.lang==='ar';
@@ -2865,7 +2908,7 @@ function printCorrectivePack(){
     .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;z-index:9;}
   </style></head><body>
     <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
-    ${correctivePackHtml(records)}
+    ${correctivePackHtml(records, prices)}
     <script>setTimeout(function(){window.print();}, 500);<\/script>
   </body></html>`;
 
@@ -2875,7 +2918,7 @@ function printCorrectivePack(){
   showToast(t('rep_pack_done',{n:records.length}));
 }
 
-function exportCorrectivePackWord(){
+function exportCorrectivePackWord(prices){
   const records = correctivePackRecords();
   if(!records.length){ showToast(t('warn_nothing')); return; }
   const bi = STATE.lang==='ar';
@@ -2887,7 +2930,7 @@ function exportCorrectivePackWord(){
     div.Section1 { page: Section1; }
     ${CORR_PACK_CSS}
   </style></head><body>
-    <div class="Section1">${correctivePackHtml(records)}</div>
+    <div class="Section1">${correctivePackHtml(records, prices)}</div>
   </body></html>`;
 
   const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
@@ -2895,7 +2938,7 @@ function exportCorrectivePackWord(){
   const a = document.createElement('a');
   a.href = url;
   const per = STATE.reportMode==='day' ? STATE.reportDay : `${STATE.reportFrom}_to_${STATE.reportTo}`;
-  a.download = `EnvironmSafe_Corrective_Reports_${per}.doc`;
+  a.download = `EnvironmSafe_Corrective_Reports_${per}${showPrices(prices)?'':'_no_prices'}.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2903,7 +2946,7 @@ function exportCorrectivePackWord(){
   showToast(t('rep_pack_done',{n:records.length}));
 }
 
-function printFaultReport(id){
+function printFaultReport(id, prices){
   const c = STATE.corrective.find(x=>x.id===id);
   if(!c) return;
   const bi = STATE.lang==='ar';
@@ -2917,7 +2960,7 @@ function printFaultReport(id){
     .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
   </style></head><body>
     <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
-    ${faultReportBody(c)}
+    ${faultReportBody(c, prices)}
     <script>setTimeout(function(){window.print();}, 400);<\/script>
   </body></html>`;
 
@@ -2926,7 +2969,7 @@ function printFaultReport(id){
   w.document.open(); w.document.write(html); w.document.close();
 }
 
-function exportFaultWord(id){
+function exportFaultWord(id, prices){
   const c = STATE.corrective.find(x=>x.id===id);
   if(!c) return;
   const bi = STATE.lang==='ar';
@@ -2940,7 +2983,7 @@ function exportFaultWord(id){
     div.Section1 { page: Section1; }
     ${FAULT_REPORT_CSS}
   </style></head><body>
-    <div class="Section1">${faultReportBody(c)}</div>
+    <div class="Section1">${faultReportBody(c, prices)}</div>
   </body></html>`;
 
   const blob = new Blob(['﻿', html], { type: 'application/msword' });
@@ -2948,7 +2991,7 @@ function exportFaultWord(id){
   const a = document.createElement('a');
   a.href = url;
   const safeName = (g?g.name:'generator').replace(/[^a-zA-Z0-9_-]+/g,'_');
-  a.download = `EnvironmSafe_Corrective_${safeName}_${c.date||new Date().toISOString().slice(0,10)}.doc`;
+  a.download = `EnvironmSafe_Corrective_${safeName}_${c.date||new Date().toISOString().slice(0,10)}${showPrices(prices)?'':'_no_prices'}.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -3632,6 +3675,9 @@ function renderCorrective(){
         <button class="btn btn-outline btn-sm" data-corrdel="${c.id}">${t('corr_delete')}</button>
         <button class="btn btn-outline btn-sm" data-corrprint="${c.id}">${t('corr_print')}</button>
         <button class="btn btn-outline btn-sm" data-corrword="${c.id}">${t('corr_word')}</button>
+        <select class="doc-prices" data-corrprices="${c.id}" aria-label="${t('doc_prices')}">
+          ${DOC_PRICE_MODES.map(v=>`<option value="${v}">${docPriceLabel(v)}</option>`).join('')}
+        </select>
       </div>
     </div>`;
   }).join('') : `<div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div>`;
@@ -3806,12 +3852,20 @@ function bindCorrective(){
     });
   });
 
+  const corrPriceMode = id => {
+    const el = document.querySelector(`[data-corrprices="${id}"]`);
+    return el ? el.value : 'with';
+  };
   document.querySelectorAll('[data-corrprint]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ printFaultReport(btn.dataset.corrprint); });
+    btn.addEventListener('click', ()=>{
+      printFaultReport(btn.dataset.corrprint, corrPriceMode(btn.dataset.corrprint));
+    });
   });
 
   document.querySelectorAll('[data-corrword]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ exportFaultWord(btn.dataset.corrword); });
+    btn.addEventListener('click', ()=>{
+      exportFaultWord(btn.dataset.corrword, corrPriceMode(btn.dataset.corrword));
+    });
   });
 
   document.querySelectorAll('[data-corredit]').forEach(btn=>{
@@ -4129,6 +4183,16 @@ function documentTotals(inv, scope, detail){
 }
 
 function invScopeLabel(v){ return t('inv_scope_' + (v||'all')); }
+function docPriceLabel(v){ return t('doc_prices_' + (v||'with')); }
+// The Reports tab has one price selector that drives both the corrective pack and the
+// table exports. Reading it from the DOM keeps buildReportTable()'s signature unchanged;
+// when it is absent (other report types, or the test harness) prices are shown.
+function reportPricesMode(){
+  const el = typeof document !== 'undefined' && document.querySelector
+    ? document.querySelector('[data-rpprices]') : null;
+  return el ? el.value : 'with';
+}
+function showPrices(mode){ return mode !== 'without'; }
 function invDetailLabel(v){ return t('inv_detail_' + (v||'detailed')); }
 
 /* ---- invoice numbering & totals ---- */
@@ -4471,6 +4535,12 @@ function renderInvoices(){
             ${INVOICE_DETAILS.map(v=>`<option value="${v}">${invDetailLabel(v)}</option>`).join('')}
           </select>
         </div>
+        <div class="io">
+          <label>${t('doc_prices')}</label>
+          <select data-invprices="${inv.id}">
+            ${DOC_PRICE_MODES.map(v=>`<option value="${v}">${docPriceLabel(v)}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-invprint="${inv.id}">${t('inv_print')}</button>
@@ -4675,26 +4745,29 @@ function bindInvoices(){
   const chosenOpts = id => {
     const sc = document.querySelector(`[data-invscope="${id}"]`);
     const dt = document.querySelector(`[data-invdetail="${id}"]`);
-    return { scope: sc ? sc.value : 'all', detail: dt ? dt.value : 'detailed' };
+    const pr = document.querySelector(`[data-invprices="${id}"]`);
+    return { scope: sc ? sc.value : 'all', detail: dt ? dt.value : 'detailed',
+             prices: pr ? pr.value : 'with' };
   };
   document.querySelectorAll('[data-invprint]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const o = chosenOpts(btn.dataset.invprint);
-      printInvoice(btn.dataset.invprint, o.scope, o.detail);
+      printInvoice(btn.dataset.invprint, o.scope, o.detail, o.prices);
     });
   });
   document.querySelectorAll('[data-invword]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const o = chosenOpts(btn.dataset.invword);
-      exportInvoiceWord(btn.dataset.invword, o.scope, o.detail);
+      exportInvoiceWord(btn.dataset.invword, o.scope, o.detail, o.prices);
     });
   });
 }
 
 /* ================= OFFICIAL INVOICE DOCUMENT (print / Word) ================= */
-function invoiceReportBody(inv, scope, detail){
+function invoiceReportBody(inv, scope, detail, prices){
   scope = INVOICE_SCOPES.indexOf(scope) >= 0 ? scope : 'all';
   detail = INVOICE_DETAILS.indexOf(detail) >= 0 ? detail : 'detailed';
+  const withPrices = showPrices(prices);
   const bi = STATE.lang==='ar';
   const loc = bi ? 'ar' : undefined;
   const g = inv.genId ? genById(inv.genId) : null;
@@ -4711,11 +4784,11 @@ function invoiceReportBody(inv, scope, detail){
       <td>${escHtml(l.desc||'')}${(detail!=='summary' && l.ref)?` <span class="lref">(${escHtml(l.ref)})</span>`:''}</td>
       <td>${l.kind==='service'?t('inv_kind_service'):t('inv_kind_good')}</td>
       <td class="num">${parseFloat(l.qty)||0}</td>
-      <td class="num">${moneyNum(l.unitPrice)}</td>
-      <td class="num">${moneyNum(lineTotal(l))}</td>
+      ${withPrices?`<td class="num">${moneyNum(l.unitPrice)}</td>
+      <td class="num">${moneyNum(lineTotal(l))}</td>`:''}
     </tr>`).join('');
 
-  const banks = bankAccounts();
+  const banks = withPrices ? bankAccounts() : [];
   const bankBlock = banks.length ? `
     <div class="blk bankblk">
       <div class="bl">${t('inv_bank_title')}</div>
@@ -4729,7 +4802,7 @@ function invoiceReportBody(inv, scope, detail){
     <div class="hdr">
       <img src="${REPORT_LOGO_B64}" alt="logo">
       <div>
-        <div class="t">${t('inv_report_title')} ${escHtml(inv.invoiceNo||'')}</div>
+        <div class="t">${withPrices ? t('inv_report_title') : t('inv_note_title')} ${escHtml(inv.invoiceNo||'')}</div>
         <div class="s">EnvironmSafe — Engineering, Trading &amp; Services Ltd.  ·  +967 78 340 2932  ·  www.environmsafe.com</div>
       </div>
     </div>
@@ -4745,18 +4818,19 @@ function invoiceReportBody(inv, scope, detail){
       ${field(t('inv_ref'), inv.ref)}
       ${field(t('inv_status'), invStatusLabel(inv.status))}
       ${field(t('inv_paid_date'), inv.paidDate)}
-      ${field(t('bill_currency'), cur)}
+      ${withPrices ? field(t('bill_currency'), cur) : ''}
       ${field(t('inv_scope'), invScopeLabel(scope))}
       ${field(t('inv_detail'), invDetailLabel(detail))}
     </div>
     <table class="itbl">
       <thead><tr>
         <th class="num">#</th><th>${t('inv_line_desc')}</th><th>${t('inv_line_kind')}</th>
-        <th class="num">${t('inv_line_qty')}</th><th class="num">${t('inv_line_price')}</th><th class="num">${t('inv_line_total')}</th>
+        <th class="num">${t('inv_line_qty')}</th>
+        ${withPrices?`<th class="num">${t('inv_line_price')}</th><th class="num">${t('inv_line_total')}</th>`:''}
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div class="totwrap">
+    ${withPrices ? `<div class="totwrap">
       <table class="tottbl">
         <tr><td>${tt.partial ? t('inv_doc_subtotal') : t('inv_subtotal')}</td><td class="num">${moneyNum(tt.subtotal)} ${cur}</td></tr>
         ${tt.discount?`<tr><td>${t('inv_discount')}</td><td class="num">− ${moneyNum(tt.discount)} ${cur}</td></tr>`:''}
@@ -4764,11 +4838,11 @@ function invoiceReportBody(inv, scope, detail){
         ${(!tt.partial && tt.paid)?`<tr><td>${t('inv_paid_amount')}</td><td class="num">${moneyNum(tt.paid)} ${cur}</td></tr>`:''}
         ${(!tt.partial && tt.balance>0)?`<tr class="bal"><td>${t('inv_balance')}</td><td class="num">${moneyNum(tt.balance)} ${cur}</td></tr>`:''}
       </table>
-    </div>
-    ${tt.partial?`<div class="terms"><b>${t('inv_partial_note')}</b></div>`:''}
+    </div>` : `<div class="terms"><b>${t('inv_noprice_note')}</b></div>`}
+    ${(withPrices && tt.partial)?`<div class="terms"><b>${t('inv_partial_note')}</b></div>`:''}
     ${inv.notes?`<div class="blk"><div class="bl">${t('inv_notes')}</div><div class="bv">${escHtml(inv.notes).replace(/\n/g,'<br>')}</div></div>`:''}
     ${bankBlock}
-    <div class="terms">${t('inv_terms')}<br>${t('inv_thanks')}</div>
+    <div class="terms">${withPrices?t('inv_terms')+'<br>':''}${t('inv_thanks')}</div>
     <div class="signrow">
       <div class="signbox">
         <div class="signtitle">${t('inv_sign_prepared')}</div>
@@ -4800,7 +4874,7 @@ const INVOICE_REPORT_CSS = FAULT_REPORT_CSS + `
     .bankline .bacct{white-space:nowrap;direction:ltr;}
 `;
 
-function printInvoice(id, scope, detail){
+function printInvoice(id, scope, detail, prices){
   const inv = STATE.invoices.find(x=>x.id===id);
   if(!inv) return;
   const bi = STATE.lang==='ar';
@@ -4813,7 +4887,7 @@ function printInvoice(id, scope, detail){
     .noprint{position:fixed;top:8px;${bi?'left':'right'}:8px;background:#C49A2A;color:#1B2A4A;border:none;padding:10px 18px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;}
   </style></head><body>
     <button class="noprint" onclick="window.print()">${bi?'🖨 طباعة / حفظ PDF':'🖨 Print / Save PDF'}</button>
-    ${invoiceReportBody(inv, scope, detail)}
+    ${invoiceReportBody(inv, scope, detail, prices)}
     <script>setTimeout(function(){window.print();}, 400);<\/script>
   </body></html>`;
 
@@ -4822,7 +4896,7 @@ function printInvoice(id, scope, detail){
   w.document.open(); w.document.write(html); w.document.close();
 }
 
-function exportInvoiceWord(id, scope, detail){
+function exportInvoiceWord(id, scope, detail, prices){
   const inv = STATE.invoices.find(x=>x.id===id);
   if(!inv) return;
   const bi = STATE.lang==='ar';
@@ -4834,14 +4908,15 @@ function exportInvoiceWord(id, scope, detail){
     div.Section1 { page: Section1; }
     ${INVOICE_REPORT_CSS}
   </style></head><body>
-    <div class="Section1">${invoiceReportBody(inv, scope, detail)}</div>
+    <div class="Section1">${invoiceReportBody(inv, scope, detail, prices)}</div>
   </body></html>`;
 
   const blob = new Blob(['﻿', html], { type: 'application/msword' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const sfx = [scope && scope!=='all' ? scope : '', detail==='summary' ? 'summary' : ''].filter(Boolean).join('_');
+  const sfx = [scope && scope!=='all' ? scope : '', detail==='summary' ? 'summary' : '',
+               showPrices(prices) ? '' : 'no_prices'].filter(Boolean).join('_');
   a.download = `EnvironmSafe_${(inv.invoiceNo||'Invoice').replace(/[^a-zA-Z0-9_-]+/g,'_')}${sfx?'_'+sfx:''}.doc`;
   document.body.appendChild(a);
   a.click();

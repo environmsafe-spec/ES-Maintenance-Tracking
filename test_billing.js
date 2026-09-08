@@ -464,6 +464,79 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('an unknown scope falls back to the full document',
         run(sb,`invoiceReportBody(STATE.invoices[0],'nonsense','detailed')`).indexOf('Oil filter')>=0);
 
+  console.log('\n=== Printing with and without prices ===');
+  run(sb,`STATE.billing={serviceRate:180,routineRate:23,currency:'USD',
+      bank1Name:'Alkuraimi Islamic Microfinance Bank',bank1Acct:'3108401426'};
+    __np={id:'np',genId:'g1',faultId:'Cor-830',date:'2026-09-08',status:'closed',severity:'high',
+      shortDescription:'Pump replaced',description:'Lift pump failed.',actionTaken:'Replaced.',
+      serviceFee:180,partsLines:[{name:'Startup Battery',qty:2,unitPrice:110,total:220}],photos:[]};`);
+
+  const priced = run(sb,`faultReportBody(__np,'with')`);
+  const unpriced = run(sb,`faultReportBody(__np,'without')`);
+  check('priced report shows the unit price', priced.indexOf('110.00')>=0);
+  check('priced report shows the billable total', priced.indexOf('400.00')>=0, 'expected 180 + 220');
+  check('unpriced report shows no unit price', unpriced.indexOf('110.00')<0);
+  check('unpriced report shows no total', unpriced.indexOf('400.00')<0);
+  check('unpriced report has no currency heading', unpriced.indexOf('(USD)')<0);
+  check('unpriced report still lists the item', unpriced.indexOf('Startup Battery')>=0);
+  check('unpriced report still lists the quantity',
+        /Startup Battery<\/td><td class="num">2</.test(unpriced), 'expected qty 2 next to the item');
+  check('unpriced report drops the service fee row', unpriced.indexOf('Service / call-out fee')<0);
+  check('unpriced report uses the items heading', unpriced.indexOf('Items and materials used')>=0);
+  check('unpriced report keeps all the technical content',
+        ['Cor-830','Pump replaced','Lift pump failed.','Replaced.'].every(x=>unpriced.indexOf(x)>=0));
+  check('default (no argument) still prints prices',
+        run(sb,`faultReportBody(__np)`).indexOf('400.00')>=0);
+  check('a corrective with no parts prints no items block when unpriced',
+        run(sb,`faultBillingReportBlock({genId:'g1',serviceFee:180},'without')`)==='');
+
+  console.log('\n=== Pack and its cover follow the price mode ===');
+  run(sb,`STATE.corrective=[__np]; STATE.reportType='corr'; STATE.reportMode='range';
+          STATE.reportFrom='2026-09-01'; STATE.reportTo='2026-09-30'; STATE.reportGenIds=['g1'];`);
+  const packP = run(sb,`correctivePackHtml(correctivePackRecords(),'with')`);
+  const packN = run(sb,`correctivePackHtml(correctivePackRecords(),'without')`);
+  check('priced pack cover shows the billable total', packP.indexOf('Billable total')>=0);
+  check('unpriced pack cover hides the billable total', packN.indexOf('Billable total')<0);
+  check('unpriced pack still has the cover and the report', (packN.match(/class="packpage/g)||[]).length===2);
+  check('unpriced pack shows no money at all', packN.indexOf('400.00')<0 && packN.indexOf('110.00')<0);
+  check('unpriced pack keeps the index and the record', packN.indexOf('Cor-830')>=0);
+
+  console.log('\n=== Invoice can be issued as an unpriced delivery note ===');
+  run(sb,`STATE.invoices=[{id:'iv',invoiceNo:'INV-1200',invoiceSeq:1200,client:'FAO',genId:'g1',
+    date:'2026-09-08',dueDate:'2026-10-08',status:'sent',paidAmount:0,discount:0,
+    lines:[{kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',ref:'Cor-830',desc:'Corrective repair service',qty:1,unitPrice:180,total:180},
+           {kind:'good',sourceType:'manual',desc:'Startup Battery',qty:2,unitPrice:110,total:220}]}];`);
+  const invP = run(sb,`invoiceReportBody(STATE.invoices[0],'all','detailed','with')`);
+  const invN = run(sb,`invoiceReportBody(STATE.invoices[0],'all','detailed','without')`);
+  check('priced invoice is titled Invoice', invP.indexOf('Invoice INV-1200')>=0);
+  check('priced invoice shows the total', invP.indexOf('400.00')>=0);
+  check('unpriced version is retitled as a delivery / work note',
+        invN.indexOf('Delivery / Work Note')>=0 && invN.indexOf('Invoice INV-1200')<0);
+  check('unpriced version still carries the document number', invN.indexOf('INV-1200')>=0);
+  check('unpriced version shows no amounts',
+        invN.indexOf('400.00')<0 && invN.indexOf('180.00')<0 && invN.indexOf('110.00')<0);
+  check('unpriced version lists items and quantities',
+        invN.indexOf('Startup Battery')>=0 && invN.indexOf('Corrective repair service')>=0);
+  check('unpriced version hides the bank details', invN.indexOf('3108401426')<0);
+  check('priced version keeps the bank details', invP.indexOf('3108401426')>=0);
+  check('unpriced version explains itself', invN.indexOf('No prices or amounts are shown')>=0);
+  check('unpriced version drops the payment terms', invN.indexOf('Please quote the invoice number')<0);
+  check('unpriced version keeps both signature blocks',
+        invN.indexOf('Prepared by')>=0 && invN.indexOf('Received by client')>=0);
+  check('default (no argument) invoice still prints prices',
+        run(sb,`invoiceReportBody(STATE.invoices[0],'all','detailed')`).indexOf('400.00')>=0);
+  check('unpriced + scope still filters', 
+        run(sb,`invoiceReportBody(STATE.invoices[0],'goods','detailed','without')`).indexOf('Corrective repair service')<0);
+
+  console.log('\n=== Price labels exist in both languages ===');
+  check('every price mode has a label in both languages',
+        run(sb,`DOC_PRICE_MODES.every(v=>!!I18N.en['doc_prices_'+v] && !!I18N.ar['doc_prices_'+v])`)===true);
+  check('the new document strings are translated',
+        run(sb,`['doc_prices','corr_items_used','inv_note_title','inv_noprice_note','rep_prices_hint']
+                 .every(k=>!!I18N.en[k] && !!I18N.ar[k])`)===true);
+  check('reportPricesMode defaults to with when no selector is on the page',
+        run(sb,`reportPricesMode()`)==='with');
+
   console.log('\n=== Existing records keep working (nothing lost) ===');
   run(sb,`STATE.billing={serviceRate:180,routineRate:22,currency:'USD'};
           __old={id:'old1',genId:'g1',faultId:'Cor-800',date:'2026-05-01',status:'closed',

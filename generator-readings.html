@@ -379,7 +379,7 @@ const DEFAULT_SERVICE_RATE = 180;           // USD per corrective (fault) visit 
 const DEFAULT_ROUTINE_RATE = 23;            // USD per routine/preventive visit — FAO contract Option 2 (250 h)
 const DEFAULT_CURRENCY = 'USD';
 // How an invoice document is issued: which lines it shows, and at what level of detail.
-const INVOICE_SCOPES = ['all','services','goods'];
+const INVOICE_SCOPES = ['all','services','routine','corrective','goods'];
 const INVOICE_DETAILS = ['detailed','summary'];
 const INVOICE_ID_PREFIX = 'INV-';
 const INVOICE_ID_START = 1001;
@@ -604,7 +604,9 @@ const I18N = {
 
     inv_order_no:'رقم الطلب', inv_contract_no:'رقم العقد / FRA', inv_serial_no:'الرقم التسلسلي',
     inv_issue_opts:'خيارات الإصدار',
-    inv_scope:'المحتوى', inv_scope_all:'خدمات وأصناف', inv_scope_services:'الخدمات فقط', inv_scope_goods:'الأصناف فقط',
+    inv_scope:'المحتوى', inv_scope_all:'خدمات وأصناف', inv_scope_services:'كل الخدمات',
+    inv_scope_routine:'خدمات الصيانة الدورية', inv_scope_corrective:'الصيانة التصحيحية',
+    inv_scope_goods:'الأصناف فقط',
     inv_detail:'التفصيل', inv_detail_detailed:'تفصيلي', inv_detail_summary:'إجمالي',
     inv_sum_corrective:'زيارات صيانة تصحيحية',
     inv_sum_routine:'زيارات صيانة دورية (250 ساعة)',
@@ -826,7 +828,9 @@ const I18N = {
 
     inv_order_no:'Order number', inv_contract_no:'FRA / Contract No.', inv_serial_no:'Serial No.',
     inv_issue_opts:'Issue options',
-    inv_scope:'Contents', inv_scope_all:'Services + goods', inv_scope_services:'Services only', inv_scope_goods:'Goods only',
+    inv_scope:'Contents', inv_scope_all:'Services + goods', inv_scope_services:'All services',
+    inv_scope_routine:'Scheduled maintenance services', inv_scope_corrective:'Corrective maintenance',
+    inv_scope_goods:'Goods only',
     inv_detail:'Detail', inv_detail_detailed:'Detailed', inv_detail_summary:'Summary',
     inv_sum_corrective:'Corrective maintenance visits',
     inv_sum_routine:'Routine maintenance visits (250 h)',
@@ -4061,8 +4065,15 @@ function linesFromWorkItem(w){
    subtotal for the part being issued. */
 function scopeLines(lines, scope){
   const ls = lines || [];
-  if(scope==='services') return ls.filter(l=>l.kind==='service');
-  if(scope==='goods')    return ls.filter(l=>l.kind!=='service');
+  // 'routine' and 'corrective' split the service lines by where the work came from:
+  // a routine line is a scheduled service VISIT (sourceType 'service'); everything else
+  // that is a service line is corrective. The 'corrective' test is deliberately
+  // "not routine" rather than "sourceType === fault", so a hand-added service line can
+  // never fall outside both and quietly disappear from every partial issue.
+  if(scope==='services')   return ls.filter(l=>l.kind==='service');
+  if(scope==='routine')    return ls.filter(l=>l.kind==='service' && l.sourceType==='service');
+  if(scope==='corrective') return ls.filter(l=>l.kind==='service' && l.sourceType!=='service');
+  if(scope==='goods')      return ls.filter(l=>l.kind!=='service');
   return ls.slice();
 }
 

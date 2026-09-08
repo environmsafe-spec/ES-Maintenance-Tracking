@@ -342,6 +342,54 @@ function run(sb,c){return vm.runInContext(c,sb);}
   dt = run(sb,`documentTotals(__doc,'all','detailed')`);
   check('a full issue is not partial and matches the stored total', dt.partial===false && dt.total===394, dt.total);
 
+  console.log('\n=== Routine vs corrective, issued separately ===');
+  check('scheduled maintenance scope keeps only routine visits',
+        run(sb,`scopeLines(__doc.lines,'routine').length`)===1,
+        run(sb,`scopeLines(__doc.lines,'routine').length`));
+  check('...and it is the routine line', run(sb,`scopeLines(__doc.lines,'routine')[0].unitPrice`)===22);
+  check('corrective scope keeps only corrective service lines',
+        run(sb,`scopeLines(__doc.lines,'corrective').length`)===1,
+        run(sb,`scopeLines(__doc.lines,'corrective').length`));
+  check('...and it is the 180 corrective line', run(sb,`scopeLines(__doc.lines,'corrective')[0].unitPrice`)===180);
+  check('neither scope leaks a goods line',
+        run(sb,`scopeLines(__doc.lines,'routine').concat(scopeLines(__doc.lines,'corrective')).every(l=>l.kind==='service')`)===true);
+  check('routine subtotal', run(sb,`linesSubtotal(scopeLines(__doc.lines,'routine'))`)===22);
+  check('corrective subtotal', run(sb,`linesSubtotal(scopeLines(__doc.lines,'corrective'))`)===180);
+  check('routine + corrective together equal all services',
+        run(sb,`round2(linesSubtotal(scopeLines(__doc.lines,'routine'))+linesSubtotal(scopeLines(__doc.lines,'corrective')))`)
+        === run(sb,`linesSubtotal(scopeLines(__doc.lines,'services'))`));
+  check('routine + corrective + goods equal the whole invoice',
+        run(sb,`round2(linesSubtotal(scopeLines(__doc.lines,'routine'))+linesSubtotal(scopeLines(__doc.lines,'corrective'))+linesSubtotal(scopeLines(__doc.lines,'goods')))`)
+        === run(sb,`linesSubtotal(__doc.lines)`));
+  check('no service line can fall outside both scopes (a manual service line lands in corrective)',
+        run(sb,`scopeLines([{kind:'service',sourceType:'manual',qty:1,unitPrice:50}],'corrective').length`)===1);
+  dt = run(sb,`documentTotals(__doc,'routine','detailed')`);
+  check('a scheduled-maintenance issue is marked partial', dt.partial===true && dt.total===22, dt.total);
+  dt = run(sb,`documentTotals(__doc,'corrective','detailed')`);
+  check('a corrective issue is marked partial', dt.partial===true && dt.total===180, dt.total);
+
+  console.log('\n=== The two new documents print correctly ===');
+  run(sb,`STATE.invoices=[{id:'ix',invoiceNo:'INV-1100',invoiceSeq:1100,client:'FAO',date:'2026-09-08',status:'sent',
+    paidAmount:0,discount:0,lines:[
+      {kind:'service',sourceType:'service',genId:'g1',genName:'GEN-01',desc:'Scheduled maintenance service - 250 hr',qty:1,unitPrice:23,total:23},
+      {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',ref:'Cor-818',desc:'Corrective repair service',qty:1,unitPrice:180,total:180},
+      {kind:'good',sourceType:'manual',desc:'Oil filter',qty:2,unitPrice:18,total:36}]}];`);
+  let rBody = run(sb,`invoiceReportBody(STATE.invoices[0],'routine','detailed')`);
+  check('scheduled-maintenance document keeps the routine line', rBody.indexOf('Scheduled maintenance service')>=0);
+  check('scheduled-maintenance document drops the corrective line', rBody.indexOf('Corrective repair service')<0);
+  check('scheduled-maintenance document drops the goods line', rBody.indexOf('Oil filter')<0);
+  check('scheduled-maintenance document is stamped partial', rBody.indexOf('partial issue')>=0);
+  let cBody = run(sb,`invoiceReportBody(STATE.invoices[0],'corrective','detailed')`);
+  check('corrective document keeps the corrective line', cBody.indexOf('Corrective repair service')>=0);
+  check('corrective document drops the routine line', cBody.indexOf('Scheduled maintenance service')<0);
+  check('corrective document drops the goods line', cBody.indexOf('Oil filter')<0);
+  check('corrective document names the contents on the header',
+        cBody.indexOf(run(sb,`t('inv_scope_corrective')`))>=0);
+  check('each new scope has a label in both languages',
+        run(sb,`['routine','corrective'].every(v=>!!I18N.en['inv_scope_'+v] && !!I18N.ar['inv_scope_'+v])`)===true);
+  check('both new scopes are offered in the dropdown list',
+        run(sb,`INVOICE_SCOPES.indexOf('routine')>=0 && INVOICE_SCOPES.indexOf('corrective')>=0`)===true);
+
   console.log('\n=== Summary invoice: 2 lines per genset ===');
   run(sb,`__sum={lines:[
     {kind:'service',sourceType:'fault',genId:'g1',genName:'GEN-01',desc:'Repair Cor-1',ref:'Cor-1',qty:1,unitPrice:180},

@@ -253,6 +253,126 @@ function run(sb,c){return vm.runInContext(c,sb);}
   check('newer fault (old2, Feb) gets the next number', byDocId.old2 && byDocId.old2.faultId==='Cor-902', JSON.stringify(byDocId.old2));
   check('the already-numbered fault was left untouched', !byDocId.hasOne);
 
+  console.log('\n=== Corrective tab: filters ===');
+  run(sb,`
+    STATE.generators = [
+      {id:'fao-1', name:'FAO GEN-01 140 kVA', client:'FAO'},
+      {id:'fao-2', name:'FAO GEN-02 65 kVA',  client:'FAO'},
+      {id:'un-1',  name:'UNHCR Genset 1',     client:'UNHCR'}
+    ];
+    STATE.corrective = [
+      {id:'f1', faultId:'Cor-818', genId:'fao-1', date:'2026-08-13', status:'closed',
+       shortDescription:'Dead starter battery', description:'140 kVA would not start', by:'Wajdi'},
+      {id:'f2', faultId:'Cor-820', genId:'fao-1', date:'2026-08-26', status:'open',
+       shortDescription:'Over-frequency at 56 Hz', description:'ATS refused to transfer', by:'Mohammed Taha'},
+      {id:'f3', faultId:'Cor-821', genId:'fao-2', date:'2026-09-01', status:'in_progress',
+       shortDescription:'Lift pump failure', description:'Pump replaced', by:'Wajdi'},
+      {id:'f4', faultId:'Cor-700', genId:'un-1',  date:'2026-05-02', status:'closed',
+       shortDescription:'UNHCR job', description:'unrelated', by:'Ali'},
+      {id:'f5', faultId:'Cor-701', genId:'fao-2', date:'',           status:'open',
+       shortDescription:'No date recorded', description:'legacy record', by:''}
+    ];
+    clearCorrFilters();
+    STATE.corrOpenCards = {};
+  `);
+  const ids = f => run(sb,`filteredCorrective(${JSON.stringify(f)}).map(c=>c.faultId).sort().join(',')`);
+
+  check('no filters shows every record', run(sb,'filteredCorrective().length')===5,
+        run(sb,'filteredCorrective().length'));
+  check('records come back newest first',
+        run(sb,'filteredCorrective()[0].faultId')==='Cor-821', run(sb,'filteredCorrective()[0].faultId'));
+
+  check('filter by client keeps only that client',
+        ids({client:'UNHCR'})==='Cor-700', ids({client:'UNHCR'}));
+  check('the other client is the complement',
+        ids({client:'FAO'})==='Cor-701,Cor-818,Cor-820,Cor-821', ids({client:'FAO'}));
+  check('filter by generator', ids({genId:'fao-2'})==='Cor-701,Cor-821', ids({genId:'fao-2'}));
+  check('filter by status open', ids({status:'open'})==='Cor-701,Cor-820', ids({status:'open'}));
+  check('filter by status in_progress', ids({status:'in_progress'})==='Cor-821');
+  check('filter by status closed', ids({status:'closed'})==='Cor-700,Cor-818');
+  check('a record with no status counts as open',
+        run(sb,`filteredCorrective({status:'open'}).length`)===2);
+
+  check('date from is inclusive', ids({from:'2026-08-26'})==='Cor-820,Cor-821', ids({from:'2026-08-26'}));
+  check('date to is inclusive', ids({to:'2026-08-13'})==='Cor-700,Cor-818', ids({to:'2026-08-13'}));
+  check('a period takes both ends', ids({from:'2026-08-01',to:'2026-08-31'})==='Cor-818,Cor-820');
+  check('a record with no date is hidden once a period is asked for',
+        ids({from:'2026-01-01'}).indexOf('Cor-701')<0, ids({from:'2026-01-01'}));
+  check('...but is shown when no period is set', ids({}).indexOf('Cor-701')>=0);
+
+  check('search matches the corrective ID', ids({search:'cor-820'})==='Cor-820');
+  check('search matches the short description', ids({search:'lift pump'})==='Cor-821');
+  check('search matches the technician', ids({search:'Mohammed'})==='Cor-820');
+  check('search matches the generator name', ids({search:'GEN-02'})==='Cor-701,Cor-821');
+  check('search is case-insensitive', ids({search:'OVER-FREQUENCY'})==='Cor-820');
+  check('a search that matches nothing returns nothing', ids({search:'zzzz'})==='');
+
+  check('filters combine (client + status + period)',
+        ids({client:'FAO',status:'open',from:'2026-08-01',to:'2026-08-31'})==='Cor-820',
+        ids({client:'FAO',status:'open',from:'2026-08-01',to:'2026-08-31'}));
+  check('a combination with no match returns nothing',
+        ids({client:'UNHCR',genId:'fao-1'})==='');
+
+  console.log('\n=== Corrective tab: filter state and badge ===');
+  check('a cleared filter set counts zero active filters', run(sb,'corrFilterActiveCount()')===0);
+  run(sb,`STATE.corrFilterClient='FAO'; STATE.corrFrom='2026-08-01'; STATE.corrSearch='pump';`);
+  check('each set filter is counted', run(sb,'corrFilterActiveCount()')===3, run(sb,'corrFilterActiveCount()'));
+  check('corrFilterState reads the live STATE',
+        run(sb,`corrFilterState().client`)==='FAO' && run(sb,`corrFilterState().search`)==='pump');
+  check('blank text is not counted as a filter',
+        (run(sb,`STATE.corrSearch='   '; corrFilterActiveCount()`))===2);
+  run(sb,`clearCorrFilters();`);
+  check('clearing resets every filter', run(sb,'corrFilterActiveCount()')===0);
+  check('clearing brings the whole list back', run(sb,'filteredCorrective().length')===5);
+  check('"all" is treated as no filter at all',
+        run(sb,`corrFilterActiveCount({client:'all',genId:'all',status:'all',from:'',to:'',search:''})`)===0);
+
+  console.log('\n=== Corrective tab: the new-record form is folded away by default ===');
+  check('the form starts closed', run(sb,'STATE.corrFormOpen')===false);
+  check('the filter panel starts closed', run(sb,'STATE.corrFiltersOpen')===false);
+  const closedHtml = run(sb,'renderCorrective()');
+  check('the add button is offered instead of the form',
+        closedHtml.indexOf('id="corr-add-btn"')>=0, 'no add button');
+  check('the new-record fields are not rendered while it is closed',
+        closedHtml.indexOf('id="c-save"')<0, 'the form is rendered anyway');
+  check('the filters button is present', closedHtml.indexOf('id="corr-filters-btn"')>=0);
+  check('the record count is shown',
+        closedHtml.indexOf(run(sb,`t('corr_showing',{n:5,total:5})`))>=0, 'no count line');
+  run(sb,`STATE.corrFormOpen = true;`);
+  const openHtml = run(sb,'renderCorrective()');
+  check('tapping the button reveals the full form', openHtml.indexOf('id="c-save"')>=0);
+  check('...with a way to close it again', openHtml.indexOf('id="c-close"')>=0);
+  run(sb,`STATE.corrFormOpen = false; STATE.corrFiltersOpen = true;`);
+  const filtHtml = run(sb,'renderCorrective()');
+  ['corr-f-client','corr-f-gen','corr-f-from','corr-f-to','corr-f-search'].forEach(id=>{
+    check('the filter panel offers '+id, filtHtml.indexOf('id="'+id+'"')>=0);
+  });
+  check('every status is offered as a chip',
+        run(sb,'CORR_STATUS').every(v=>filtHtml.indexOf('data-corrfilter="'+v+'"')>=0));
+  check('clear-filters only appears once something is filtered',
+        filtHtml.indexOf('id="corr-f-clear"')<0, 'clear button shown with no filters set');
+  run(sb,`STATE.corrSearch='pump';`);
+  check('...and appears once it is', run(sb,'renderCorrective()').indexOf('id="corr-f-clear"')>=0);
+  check('a filtered-out list says so rather than "no records yet"',
+        run(sb,`STATE.corrSearch='zzzz'; renderCorrective()`).indexOf(run(sb,`t('corr_none_filter')`))>=0);
+  run(sb,`clearCorrFilters(); STATE.corrFiltersOpen=false;`);
+
+  console.log('\n=== Corrective tab: record cards ===');
+  const cardHtml = run(sb,'renderCorrective()');
+  check('each card carries its details toggle',
+        (cardHtml.match(/data-corrdetails=/g)||[]).length===5,
+        (cardHtml.match(/data-corrdetails=/g)||[]).length);
+  check('cards are collapsed until asked for', cardHtml.indexOf('data-corrdetails="f1" open')<0);
+  run(sb,`STATE.corrOpenCards={f1:true};`);
+  check('an expanded card stays expanded through a re-render',
+        run(sb,'renderCorrective()').indexOf('data-corrdetails="f1" open')>=0);
+  check('the print and Word buttons are still on every card',
+        (cardHtml.match(/data-corrprint=/g)||[]).length===5 &&
+        (cardHtml.match(/data-corrword=/g)||[]).length===5);
+  check('the full description is still in the card, just folded',
+        cardHtml.indexOf('ATS refused to transfer')>=0);
+  run(sb,`STATE.corrOpenCards={};`);
+
   console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);
   process.exit(fail?1:0);
 })();

@@ -192,6 +192,18 @@
   .pill-open{background:#FDECEA;color:#C0392B;}
   .pill-in_progress{background:#FEF5E0;color:#8A6D1F;}
   .pill-closed{background:#E7F6EC;color:#1E7A43;}
+  .corr-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .corr-toolbar h3{margin:0;flex:1;min-width:0;}
+  .icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;
+    padding:0 14px;border-radius:22px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;
+    font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .icon-btn.ghost{background:#fff;color:var(--navy);}
+  .icon-btn .ic{font-size:16px;line-height:1;}
+  .filter-count{background:var(--gold);color:#fff;border-radius:999px;font-size:10.5px;
+    font-weight:800;padding:1px 6px;margin-inline-start:2px;}
+  .corr-card details>summary{font-size:12.5px;color:var(--navy);font-weight:700;cursor:pointer;
+    margin-top:8px;list-style:none;}
+  .corr-card details>summary::-webkit-details-marker{display:none;}
   .fault-id-badge{display:inline-block;font-size:11px;font-weight:800;color:var(--navy);
     background:#F5F6F8;border:1px solid var(--border);border-radius:6px;padding:2px 8px;margin-bottom:6px;font-family:monospace;}
   .photothumbs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
@@ -530,6 +542,11 @@ const I18N = {
     corr_need_desc:'⚠️ أدخل وصف الصيانة التصحيحية', corr_need_gen:'⚠️ اختر المولّد',
     corr_delete:'حذف', corr_del_confirm:'حذف هذا السجل نهائيًا؟',
     corr_filter_all:'الكل', corr_filter_open:'المفتوحة', corr_edit_status:'تغيير الحالة',
+    corr_add_btn:'سجل جديد', corr_filters:'الفلاتر', corr_f_client:'الجهة', corr_f_gen:'المولد',
+    corr_f_status:'الحالة', corr_f_from:'من تاريخ', corr_f_to:'إلى تاريخ', corr_f_search:'بحث',
+    corr_f_search_ph:'الرقم، الوصف، الفني…', corr_f_clear:'مسح الفلاتر', corr_status_any:'كل الحالات',
+    corr_showing:'عرض {n} من {total}', corr_none_filter:'لا توجد سجلات مطابقة للفلاتر',
+    corr_details:'عرض التفاصيل', corr_hide_form:'إغلاق النموذج',
     corr_open_count:'{n} صيانة تصحيحية مفتوحة',
     corr_edit:'✎ تعديل', corr_edit_title:'تعديل السجل', corr_update:'حفظ التعديلات', corr_updated:'✅ تم تحديث السجل',
     corr_cancel:'إلغاء',
@@ -761,6 +778,11 @@ const I18N = {
     corr_need_desc:'⚠️ Enter a corrective description', corr_need_gen:'⚠️ Select a generator',
     corr_delete:'Delete', corr_del_confirm:'Delete this record permanently?',
     corr_filter_all:'All', corr_filter_open:'Open only', corr_edit_status:'Change status',
+    corr_add_btn:'New record', corr_filters:'Filters', corr_f_client:'Client', corr_f_gen:'Generator',
+    corr_f_status:'Status', corr_f_from:'From date', corr_f_to:'To date', corr_f_search:'Search',
+    corr_f_search_ph:'ID, description, technician…', corr_f_clear:'Clear filters', corr_status_any:'Any status',
+    corr_showing:'Showing {n} of {total}', corr_none_filter:'No records match these filters',
+    corr_details:'Show details', corr_hide_form:'Close form',
     corr_open_count:'{n} open corrective(s)',
     corr_edit:'✎ Edit', corr_edit_title:'Edit record', corr_update:'Save changes', corr_updated:'✅ Record updated',
     corr_cancel:'Cancel',
@@ -1019,7 +1041,15 @@ let STATE = {
   corrective: [],
   svclog: [],
   corrGenId: null,
-  corrFilter: 'all',
+  corrFilter: 'all',         // status filter on the Corrective tab: all | open | in_progress | closed
+  corrFilterClient: 'all',   // ...and the client / generator / period / text filters beside it
+  corrFilterGen: 'all',
+  corrFrom: '',
+  corrTo: '',
+  corrSearch: '',
+  corrFiltersOpen: false,    // the filter panel is folded away until it is asked for
+  corrFormOpen: false,       // the new-record form only appears when the + button is tapped
+  corrOpenCards: {},         // which record cards are expanded (kept across live-sync re-renders)
   corrEditingId: null,
   newFaultPhotos: [],
   editFaultPhotos: null,
@@ -3429,6 +3459,71 @@ function openFaultCount(){
   return STATE.corrective.filter(c => c.status && c.status!=='closed').length;
 }
 
+/* ---- Corrective tab filters ----------------------------------------------
+ * The tab can hold years of records, so the list is narrowed by client,
+ * generator, status, a date period and a free-text search. Everything lives in
+ * STATE so the choice survives a live-sync re-render; corrFilterState() reads it
+ * and filteredCorrective() is a plain function of it, which is what the tests use.
+ */
+function corrFilterState(){
+  return {
+    client: STATE.corrFilterClient || 'all',
+    genId:  STATE.corrFilterGen || 'all',
+    status: STATE.corrFilter || 'all',
+    from:   STATE.corrFrom || '',
+    to:     STATE.corrTo || '',
+    search: STATE.corrSearch || ''
+  };
+}
+
+function corrSearchHaystack(c){
+  const g = genById(c.genId);
+  return [c.faultId, c.shortDescription, c.description, c.causesOfFault, c.actionTaken,
+          c.partsUsed, c.recommendations, c.by, g && g.name, g && g.client]
+    .map(x=>String(x==null?'':x)).join(' ').toLowerCase();
+}
+
+function filteredCorrective(f){
+  f = f || corrFilterState();
+  const q = String(f.search||'').trim().toLowerCase();
+  return correctiveFor(null).filter(c=>{
+    if(f.client && f.client!=='all'){
+      const g = genById(c.genId);
+      if(!g || g.client !== f.client) return false;
+    }
+    if(f.genId && f.genId!=='all' && c.genId !== f.genId) return false;
+    if(f.status && f.status!=='all' && (c.status||'open') !== f.status) return false;
+    const d = String(c.date||'');
+    // A record with no date is only hidden when a period is actually asked for.
+    if(f.from && (!d || d < f.from)) return false;
+    if(f.to   && (!d || d > f.to))   return false;
+    if(q && corrSearchHaystack(c).indexOf(q) < 0) return false;
+    return true;
+  });
+}
+
+// How many filters are actually narrowing the list — shown as a badge on the Filters button.
+function corrFilterActiveCount(f){
+  f = f || corrFilterState();
+  let n = 0;
+  if(f.client && f.client!=='all') n++;
+  if(f.genId && f.genId!=='all') n++;
+  if(f.status && f.status!=='all') n++;
+  if(f.from) n++;
+  if(f.to) n++;
+  if(String(f.search||'').trim()) n++;
+  return n;
+}
+
+function clearCorrFilters(){
+  STATE.corrFilterClient = 'all';
+  STATE.corrFilterGen = 'all';
+  STATE.corrFilter = 'all';
+  STATE.corrFrom = '';
+  STATE.corrTo = '';
+  STATE.corrSearch = '';
+}
+
 // Serial fault IDs: "Cor-813", "Cor-814", ... Derived from the highest faultSeq already
 // saved (live-synced via STATE.corrective), so no separate counter doc or transaction is
 // needed — simplest thing that works correctly for this app's single-technician workflow.
@@ -3626,13 +3721,45 @@ function renderCorrective(){
   const sevOptions = CORR_SEVERITY.map(v=>`<option value="${v}"${v==='medium'?' selected':''}>${corrSevLabel(v)}</option>`).join('');
   const statusOptions = CORR_STATUS.map(v=>`<option value="${v}">${corrStatusLabel(v)}</option>`).join('');
 
-  // filter chips
-  const chips = `
-    <div class="genchip ${STATE.corrFilter==='all'?'active':''}" data-corrfilter="all">${t('corr_filter_all')}</div>
-    <div class="genchip ${STATE.corrFilter==='open'?'active':''}" data-corrfilter="open">${t('corr_filter_open')}</div>`;
+  // ---- filter bar ---------------------------------------------------------
+  const f = corrFilterState();
+  const activeN = corrFilterActiveCount(f);
+  const esc = v => String(v==null?'':v).replace(/"/g,'&quot;');
+  const clients = clientList();
+  // Only offer generators that belong to the chosen client, so the two agree.
+  const filterGens = STATE.generators.filter(g => f.client==='all' || g.client===f.client);
 
-  let list = correctiveFor(null);
-  if(STATE.corrFilter==='open') list = list.filter(c=>c.status && c.status!=='closed');
+  const statusChips = `
+    <div class="genchip ${f.status==='all'?'active':''}" data-corrfilter="all">${t('corr_filter_all')}</div>
+    ${CORR_STATUS.map(v=>`<div class="genchip ${f.status===v?'active':''}" data-corrfilter="${v}">${corrStatusLabel(v)}</div>`).join('')}`;
+
+  const filterPanel = STATE.corrFiltersOpen ? `
+    <div style="margin-top:10px;">
+      <div class="grid2">
+        <div><label>${t('corr_f_client')}</label>
+          <select id="corr-f-client">
+            <option value="all"${f.client==='all'?' selected':''}>${t('all')}</option>
+            ${clients.map(c=>`<option value="${esc(c)}"${f.client===c?' selected':''}>${c}</option>`).join('')}
+          </select></div>
+        <div><label>${t('corr_f_gen')}</label>
+          <select id="corr-f-gen">
+            <option value="all"${f.genId==='all'?' selected':''}>${t('all')}</option>
+            ${filterGens.map(g=>`<option value="${g.id}"${f.genId===g.id?' selected':''}>${g.name}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="grid2">
+        <div><label>${t('corr_f_from')}</label><input type="date" id="corr-f-from" value="${esc(f.from)}"></div>
+        <div><label>${t('corr_f_to')}</label><input type="date" id="corr-f-to" value="${esc(f.to)}"></div>
+      </div>
+      <label>${t('corr_f_search')}</label>
+      <input type="text" id="corr-f-search" value="${esc(f.search)}" placeholder="${t('corr_f_search_ph')}">
+      <label>${t('corr_f_status')}</label>
+      <div class="genpicker">${statusChips}</div>
+      ${activeN ? `<button class="btn btn-outline btn-sm" id="corr-f-clear" style="margin-top:8px;">${t('corr_f_clear')}</button>` : ''}
+    </div>` : '';
+
+  const list = filteredCorrective(f);
+  const totalN = STATE.corrective.length;
 
   const rows = list.length ? list.map(c=>{
     if(c.id === STATE.corrEditingId) return renderCorrEditForm(c);
@@ -3649,15 +3776,18 @@ function renderCorrective(){
         <div style="text-align:end;">${statusPill}<div style="font-size:11px;color:var(--muted);margin-top:3px;">${corrSevLabel(c.severity||'low')}</div></div>
       </div>
       ${c.shortDescription?`<div style="font-weight:700;font-size:13px;margin-top:6px;">${c.shortDescription}</div>`:''}
-      <div style="font-size:12.5px;margin-top:7px;white-space:pre-wrap;">${(c.description||'')}</div>
-      ${c.causesOfFault?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_causes')}:</b> ${c.causesOfFault}</div>`:''}
-      ${c.actionTaken?`<div style="font-size:12px;margin-top:5px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_action')}:</b> ${c.actionTaken}</div>`:''}
-      ${c.partsUsed?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_parts')}:</b> ${c.partsUsed}</div>`:''}
-      ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
-      ${c.recommendations?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_recommend')}:</b> ${c.recommendations}</div>`:''}
-      ${renderPhotoThumbs(c.photos, 'view', true)}
-      ${renderCustomFieldValues('corrective', c.customFields)}
-      ${renderFaultBillingSummary(c)}
+      <details data-corrdetails="${c.id}"${STATE.corrOpenCards[c.id]?' open':''}>
+        <summary>${t('corr_details')}</summary>
+        <div style="font-size:12.5px;margin-top:7px;white-space:pre-wrap;">${(c.description||'')}</div>
+        ${c.causesOfFault?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_causes')}:</b> ${c.causesOfFault}</div>`:''}
+        ${c.actionTaken?`<div style="font-size:12px;margin-top:5px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_action')}:</b> ${c.actionTaken}</div>`:''}
+        ${c.partsUsed?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_parts')}:</b> ${c.partsUsed}</div>`:''}
+        ${(c.downtimeHrs!==undefined&&c.downtimeHrs!==null&&c.downtimeHrs!=='')?`<div style="font-size:12px;margin-top:3px;color:var(--muted);"><b>${t('corr_downtime')}:</b> ${c.downtimeHrs}</div>`:''}
+        ${c.recommendations?`<div style="font-size:12px;margin-top:3px;color:var(--muted);white-space:pre-wrap;"><b>${t('corr_recommend')}:</b> ${c.recommendations}</div>`:''}
+        ${renderPhotoThumbs(c.photos, 'view', true)}
+        ${renderCustomFieldValues('corrective', c.customFields)}
+        ${renderFaultBillingSummary(c)}
+      </details>
       <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" data-corrstatus="${c.id}">${t('corr_edit_status')}</button>
         <button class="btn btn-outline btn-sm" data-corredit="${c.id}">${t('corr_edit')}</button>
@@ -3669,13 +3799,14 @@ function renderCorrective(){
         </select>
       </div>
     </div>`;
-  }).join('') : `<div class="empty"><div class="em-ic">✅</div>${t('corr_none')}</div>`;
+  }).join('') : `<div class="empty"><div class="em-ic">${totalN?'🔍':'✅'}</div>${totalN? t('corr_none_filter') : t('corr_none')}</div>`;
 
-  return `
-  ${summary}
-  ${backfillNotice}
+  const form = STATE.corrFormOpen ? `
   <div class="card">
-    <h3>${t('corr_new')}</h3>
+    <div class="rowbetween" style="margin-bottom:8px;">
+      <h3 style="margin:0;">${t('corr_new')}</h3>
+      <button class="btn btn-outline btn-sm" id="c-close">${t('corr_hide_form')}</button>
+    </div>
     <div class="fault-id-badge">${t('corr_fault_id')}: ${FAULT_ID_PREFIX}${nextFaultSeq()}</div>
     <label>${t('corr_gen')}</label>
     <select id="c-gen">${genOptions}</select>
@@ -3711,12 +3842,25 @@ function renderCorrective(){
     <input type="file" id="c-photos" accept="image/*" multiple>
     ${renderCustomFieldInputs('corrective', null, 'c')}
     <button class="btn btn-primary" id="c-save" style="margin-top:12px;">${t('corr_save')}</button>
-  </div>
+  </div>` : '';
 
+  return `
+  ${summary}
+  ${backfillNotice}
   <div class="card">
-    <div class="rowbetween" style="margin-bottom:8px;"><h3 style="margin:0;">${t('corr_list')}</h3></div>
-    <div class="genpicker">${chips}</div>
+    <div class="corr-toolbar">
+      <h3>${t('corr_list')}</h3>
+      <button class="icon-btn ghost" id="corr-filters-btn" aria-expanded="${STATE.corrFiltersOpen?'true':'false'}">
+        <span class="ic">⚙</span>${t('corr_filters')}${activeN?`<span class="filter-count">${activeN}</span>`:''}
+      </button>
+      <button class="icon-btn" id="corr-add-btn" aria-expanded="${STATE.corrFormOpen?'true':'false'}">
+        <span class="ic">＋</span>${t('corr_add_btn')}
+      </button>
+    </div>
+    ${filterPanel}
+    <div style="font-size:12.5px;color:var(--muted);margin-top:10px;">${t('corr_showing',{n:list.length,total:totalN})}</div>
   </div>
+  ${form}
   ${rows}
   `;
 }
@@ -3724,6 +3868,56 @@ function renderCorrective(){
 function bindCorrective(){
   document.querySelectorAll('[data-corrfilter]').forEach(ch=>{
     ch.addEventListener('click', ()=>{ STATE.corrFilter = ch.dataset.corrfilter; render(); });
+  });
+
+  const addBtn = document.getElementById('corr-add-btn');
+  if(addBtn) addBtn.addEventListener('click', ()=>{
+    STATE.corrFormOpen = !STATE.corrFormOpen;
+    render();
+    if(STATE.corrFormOpen){
+      const form = document.getElementById('c-gen');
+      if(form && form.scrollIntoView) form.scrollIntoView({block:'center'});
+    }
+  });
+  const closeFormBtn = document.getElementById('c-close');
+  if(closeFormBtn) closeFormBtn.addEventListener('click', ()=>{ STATE.corrFormOpen = false; render(); });
+
+  const filtersBtn = document.getElementById('corr-filters-btn');
+  if(filtersBtn) filtersBtn.addEventListener('click', ()=>{
+    STATE.corrFiltersOpen = !STATE.corrFiltersOpen; render();
+  });
+
+  const fClient = document.getElementById('corr-f-client');
+  if(fClient) fClient.addEventListener('change', ()=>{
+    STATE.corrFilterClient = fClient.value;
+    // A generator from another client would contradict the new client filter.
+    const g = genById(STATE.corrFilterGen);
+    if(g && STATE.corrFilterClient!=='all' && g.client!==STATE.corrFilterClient) STATE.corrFilterGen = 'all';
+    render();
+  });
+  const fGen = document.getElementById('corr-f-gen');
+  if(fGen) fGen.addEventListener('change', ()=>{ STATE.corrFilterGen = fGen.value; render(); });
+  const fFrom = document.getElementById('corr-f-from');
+  if(fFrom) fFrom.addEventListener('change', ()=>{ STATE.corrFrom = fFrom.value; render(); });
+  const fTo = document.getElementById('corr-f-to');
+  if(fTo) fTo.addEventListener('change', ()=>{ STATE.corrTo = fTo.value; render(); });
+
+  // Typing re-renders the list, so put the caret back where it was.
+  const fSearch = document.getElementById('corr-f-search');
+  if(fSearch) fSearch.addEventListener('input', ()=>{
+    const pos = fSearch.selectionStart;
+    STATE.corrSearch = fSearch.value;
+    render();
+    const again = document.getElementById('corr-f-search');
+    if(again){ again.focus(); try{ again.setSelectionRange(pos,pos); }catch(e){} }
+  });
+
+  const fClear = document.getElementById('corr-f-clear');
+  if(fClear) fClear.addEventListener('click', ()=>{ clearCorrFilters(); render(); });
+
+  // Remember which cards are open, so a live sync does not fold them all back up.
+  document.querySelectorAll('[data-corrdetails]').forEach(d=>{
+    d.addEventListener('toggle', ()=>{ STATE.corrOpenCards[d.dataset.corrdetails] = d.open; });
   });
 
   bindFaultBillingBlock('c', ()=>STATE.newFaultLines, v=>{ STATE.newFaultLines = v; });
@@ -3804,6 +3998,7 @@ function bindCorrective(){
       STATE.newFaultPhotos = [];
       STATE.newFaultLines = [];
       STATE.newFaultFee = null;
+      STATE.corrFormOpen = false;   // the record is saved; fold the form away again
       render();
     }catch(e){
       console.warn('corrective save failed', e);

@@ -130,8 +130,16 @@ function makeBackendV2() {
 }
 
 function makeFirebaseMock(backend, opts={}) {
-  let authUser = null;
+  // Email/password only. By default the phone already holds a signed-in session
+  // (like a returning technician); opts.signedOut starts at the login screen and
+  // opts.anonymousLeftover simulates a session left behind by the old anonymous build.
+  let authUser = opts.signedOut ? null
+    : opts.anonymousLeftover ? { uid: 'anon-1', isAnonymous: true }
+    : { uid: 'sim', isAnonymous: false, email: 'tech@environmsafe.com' };
+  const accounts = opts.accounts || { 'tech@environmsafe.com': 'right-pass' };
+  const calls = opts.calls || [];
   const authCallbacks = [];
+  const setUser = u => { authUser = u; authCallbacks.forEach(cb => cb(authUser)); };
   return {
     initializeApp(cfg) { /* no-op */ },
     auth() {
@@ -139,17 +147,28 @@ function makeFirebaseMock(backend, opts={}) {
         onAuthStateChanged(cb) {
           authCallbacks.push(cb);
           setTimeout(() => cb(authUser), 0);
+          return () => {};
         },
         async signInAnonymously() {
-          if (opts.authAlwaysFails) throw new Error('auth failed (simulated)');
-          authUser = { uid: 'sim-' + Math.random().toString(36).slice(2) };
-          authCallbacks.forEach(cb => cb(authUser));
+          calls.push('signInAnonymously');
+          setUser({ uid: 'anon-' + Math.random().toString(36).slice(2), isAnonymous: true });
         },
+        async signInWithEmailAndPassword(email, pw) {
+          calls.push('signIn:' + email);
+          // Older SDKs report these two cases with different codes; the app must not.
+          if (!(email in accounts)) { const e = new Error('no user'); e.code = 'auth/user-not-found'; throw e; }
+          if (accounts[email] !== pw) { const e = new Error('bad pw'); e.code = 'auth/wrong-password'; throw e; }
+          setUser({ uid: 'u-' + email, isAnonymous: false, email });
+        },
+        async signOut() { calls.push('signOut'); setUser(null); },
       };
     },
     firestore() {
       const db = backend;
       db.enablePersistence = async () => { if (opts.noPersistence) throw { code: 'unimplemented' }; };
+      db.terminate = async () => { calls.push('terminate'); };
+      db.clearPersistence = async () => { calls.push('clearPersistence'); };
+      db.waitForPendingWrites = async () => { calls.push('waitForPendingWrites'); };
       return db;
     },
   };
@@ -201,6 +220,7 @@ function buildSandbox(firebaseMock) {
       removeItem: k => { delete localStore[k]; },
     },
     document: doc,
+    location: { reload(){ sandbox.__reloads = (sandbox.__reloads||0) + 1; } },
     firebase: firebaseMock,
   };
   sandbox.window = sandbox;
@@ -222,15 +242,65 @@ function run(sb, code) { return vm.runInContext(code, sb); }
     check('5 UNHCR + 3 FAO', gens.filter(g=>g.client==='UNHCR').length===5 && gens.filter(g=>g.client==='FAO').length===3);
   }
 
-  section('2. Auth failure shows retry UI, never crashes silently');
+  section('2. Signed out: login screen, never an anonymous session');
   {
     const backend = makeBackendV2();
-    const fb = attachStatics(makeFirebaseMock(backend, { authAlwaysFails: true }));
+    const calls = [];
+    const fb = attachStatics(makeFirebaseMock(backend, { signedOut: true, calls }));
     const sb = buildSandbox(fb);
     run(sb, SOURCE);
     await new Promise(r => setTimeout(r, 60));
     const htmlOut = run(sb, "document.getElementById('app').innerHTML");
-    check('shows a connect-failure message with retry option', /تعذّر|Couldn.?t connect|حاول|Try again/i.test(htmlOut), htmlOut.slice(0,120));
+    check('shows the email/password login form', /id="loginForm"/.test(htmlOut) && /type="email"/.test(htmlOut) && /type="password"/.test(htmlOut), htmlOut.slice(0,160));
+    check('never calls signInAnonymously', !calls.includes('signInAnonymously'), calls.join(','));
+    check('does not touch Firestore before sign-in', run(sb, 'STATE.everRendered') !== true && run(sb, 'STATE.generators.length') === 0);
+
+    const submit = async (email, pw) => {
+      ELEMENTS['login-email'] = ELEMENTS['login-email'] || makeEl('login-email');
+      ELEMENTS['login-pass'] = ELEMENTS['login-pass'] || makeEl('login-pass');
+      ELEMENTS['login-email'].value = email; ELEMENTS['login-pass'].value = pw;
+      await LISTENERS['loginForm']['submit']({ preventDefault(){} });
+      await new Promise(r => setTimeout(r, 60));
+      const m = /<div class="login-err" id="loginErr">([^<]*)<\/div>/.exec(run(sb, "document.getElementById('app').innerHTML"));
+      return m ? m[1] : '';
+    };
+    const errUnknown = await submit('nobody@example.com', 'whatever');
+    const errWrongPw = await submit('tech@environmsafe.com', 'wrong');
+    check('unknown email shows an error', /incorrect|غير صحيحة/i.test(errUnknown), errUnknown);
+    check('unknown email and wrong password give the SAME message (no account enumeration)', errUnknown === errWrongPw, `${errUnknown} | ${errWrongPw}`);
+    await submit('tech@environmsafe.com', 'right-pass');
+    const gens = run(sb, 'STATE.generators');
+    check('correct credentials load the app', gens.length === 8 && run(sb, 'STATE.everRendered') === true, `gens=${gens.length}`);
+    check('signed-in email is shown in Setup', (run(sb, "STATE.activeTab='generators'; render(); document.getElementById('app').innerHTML")).includes('tech@environmsafe.com'));
+  }
+
+  section('2b. Leftover anonymous session is signed out and its cache wiped');
+  {
+    const backend = makeBackendV2();
+    const calls = [];
+    const fb = attachStatics(makeFirebaseMock(backend, { anonymousLeftover: true, calls }));
+    const sb = buildSandbox(fb);
+    run(sb, SOURCE);
+    await new Promise(r => setTimeout(r, 60));
+    check('anonymous session is signed out', calls.includes('signOut'), calls.join(','));
+    check('Firestore terminated then persistence cleared', calls.indexOf('terminate') > -1 && calls.indexOf('terminate') < calls.indexOf('clearPersistence'), calls.join(','));
+    check('no data was loaded for the anonymous session', run(sb, 'STATE.generators.length') === 0);
+    check('page reloads to a clean login screen', (sb.__reloads || 0) >= 1);
+  }
+
+  section('2c. Sign-out wipes the on-device Firestore cache');
+  {
+    const backend = makeBackendV2();
+    const calls = [];
+    const fb = attachStatics(makeFirebaseMock(backend, { calls }));
+    const sb = buildSandbox(fb);
+    run(sb, SOURCE);
+    await new Promise(r => setTimeout(r, 60));
+    await run(sb, 'signOutUser()');
+    const iT = calls.indexOf('terminate'), iC = calls.indexOf('clearPersistence'), iS = calls.indexOf('signOut');
+    check('terminate() then clearPersistence() are called', iT > -1 && iC > iT, calls.join(','));
+    check('user is signed out', iS > -1, calls.join(','));
+    check('page reloads afterwards', (sb.__reloads || 0) >= 1);
   }
 
   section('3. TWO DEVICES, ONE PROJECT — save on phone A, appears live on phone B');
@@ -334,6 +404,32 @@ function run(sb, code) { return vm.runInContext(code, sb); }
     const htmlOut = run(sb, "document.getElementById('app').innerHTML");
     check('shows diagnostic mentioning security rules (not stuck on Connecting)', /security rules|permission|قواعد|أمان/i.test(htmlOut), htmlOut.slice(0,200));
     check('is NOT stuck on the generic Connecting message', !/⏳<\/div>(Connecting|جارٍ)/.test(htmlOut));
+  }
+
+  section('7. Reading save refused by the rules says NOT SAVED, never "queued"');
+  {
+    const backend = makeBackendV2();
+    const realCollection = backend.collection.bind(backend);
+    backend.collection = (name) => {
+      const c = realCollection(name);
+      if (name === 'readings') c.add = async () => { const e = new Error('Missing or insufficient permissions.'); e.code = 'permission-denied'; throw e; };
+      return c;
+    };
+    const fb = attachStatics(makeFirebaseMock(backend));
+    const sb = buildSandbox(fb);
+    run(sb, SOURCE);
+    await new Promise(r => setTimeout(r, 60));
+    const genId = run(sb, 'STATE.generators[0].id');
+    run(sb, `STATE.activeTab='new'; render();`);
+    const vals = {'f-gen':genId,'f-tech':'Ahmed','f-datetime':'2026-07-17T10:00','f-hours':'5000','f-vL1':'400'};
+    for (const [k,v] of Object.entries(vals)) { ELEMENTS[k] = ELEMENTS[k] || makeEl(k); ELEMENTS[k].value = v; }
+    await LISTENERS['saveBtn']['click']();
+    await new Promise(r => setTimeout(r, 30));
+    const toast = run(sb, "document.getElementById('toast').textContent");
+    check('toast says not saved', /not saved|لم يتم الحفظ/i.test(toast), toast);
+    check('toast never says queued / will sync', !/queued|will sync|سيتم المزامنة/i.test(toast), toast);
+    check('toast tells the user to sign in', /sign in|سجّل الدخول/i.test(toast), toast);
+    check('reading was not stored', run(sb, 'STATE.readings.length') === 0);
   }
 
   console.log(`\n===============================`);

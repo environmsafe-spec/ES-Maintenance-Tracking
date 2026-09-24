@@ -11,8 +11,9 @@
     initializeApp(){},
     auth(){
       return {
-        onAuthStateChanged(cb){ setTimeout(()=>cb({uid:'sim'}),0); },
-        async signInAnonymously(){},
+        onAuthStateChanged(cb){ setTimeout(()=>cb({uid:'sim', isAnonymous:false, email:'tech@environmsafe.com'}),0); return ()=>{}; },
+        async signInWithEmailAndPassword(){},
+        async signOut(){},
       };
     },
     firestore(){
@@ -39,6 +40,9 @@
           return { set(ref,data){ ops.push({name:ref.__collection,id:ref.__id,data}); }, async commit(){ ops.forEach(({name,id,data})=>{ collections[name][id]={...data}; }); Object.keys(collections).forEach(notify); } };
         },
         async enablePersistence(){},
+        async terminate(){},
+        async clearPersistence(){},
+        async waitForPendingWrites(){},
       };
       return db;
     },

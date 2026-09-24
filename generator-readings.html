@@ -67,7 +67,7 @@
 
   label{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin:10px 0 4px;}
   label.req::after{content:" *";color:var(--bad);}
-  select,input[type=text],input[type=number],input[type=datetime-local],input[type=date],textarea{
+  select,input[type=text],input[type=number],input[type=datetime-local],input[type=date],input[type=email],input[type=password],textarea{
     width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:10px;
     font-size:15.5px;background:#FAFBFC;color:var(--text);font-family:inherit;
   }
@@ -155,6 +155,11 @@
   .stat .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
 
   .empty{text-align:center;padding:40px 20px;color:var(--muted);}
+  body.signed-out nav.tabbar{display:none;}
+  .loginbox{max-width:420px;margin:24px auto 0;}
+  .login-err{color:var(--bad);font-size:13.5px;font-weight:600;min-height:18px;margin-top:10px;}
+  .signout-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .signout-row .who{font-size:13.5px;color:var(--text);word-break:break-all;}
   .empty .em-ic{font-size:38px;margin-bottom:10px;}
 
   .chartwrap{position:relative;height:180px;margin-top:6px;}
@@ -367,13 +372,110 @@ let unsubCustomFields = null;
 let unsubPricelist = null;
 let unsubInvoices = null;
 
+// Only named email/password accounts may use the app. The Firestore rules reject
+// anonymous tokens, so a leftover anonymous session from the old build is signed
+// out (and its cached copy of the data wiped) before the login screen is shown.
+let CURRENT_USER = null;
+let authResolved = false;
 function authReady(){
-  return new Promise((resolve, reject)=>{
-    auth.onAuthStateChanged(user=>{
-      if(user){ resolve(user); return; }
-      auth.signInAnonymously().catch(reject);
-    }, reject);
+  return new Promise((resolve)=>{
+    auth.onAuthStateChanged(async user=>{
+      if(user && user.isAnonymous){
+        await wipeLocalData();
+        try{ await auth.signOut(); }catch(e){}
+        location.reload();
+        return;
+      }
+      if(user){
+        CURRENT_USER = user;
+        setSignedIn(true);
+        if(!authResolved){ authResolved = true; resolve(user); }
+        return;
+      }
+      CURRENT_USER = null;
+      // Signed out elsewhere (another tab) after the app loaded: start clean.
+      if(authResolved){ location.reload(); return; }
+      setSignedIn(false);
+      showLoginScreen();
+    }, err=>{ setSignedIn(false); showLoginScreen(err); });
   });
+}
+
+function setSignedIn(on){
+  if(document.body && document.body.classList) document.body.classList.toggle('signed-out', !on);
+}
+
+// The same message for an unknown address and a wrong password, so the screen
+// never reveals which addresses have accounts.
+function describeLoginError(err){
+  const code = (err && err.code) || '';
+  if(['auth/invalid-credential','auth/invalid-login-credentials','auth/user-not-found',
+      'auth/wrong-password','auth/invalid-email','auth/user-disabled'].includes(code)) return t('login_bad_creds');
+  if(code === 'auth/too-many-requests') return t('login_too_many');
+  if(code === 'auth/network-request-failed') return t('login_network');
+  return t('login_failed') + (code ? ' (' + code + ')' : '');
+}
+
+function showLoginScreen(err, email){
+  const title = document.getElementById('pageTitle');
+  const sub = document.getElementById('pageSub');
+  if(title) title.textContent = t('login_title');
+  if(sub) sub.textContent = t('login_sub');
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="card loginbox">
+    <h3>${t('login_title')}</h3>
+    <form id="loginForm" autocomplete="on" novalidate>
+      <label class="req" for="login-email">${t('login_email')}</label>
+      <input type="email" id="login-email" autocomplete="username" inputmode="email" dir="ltr" value="${escHtml(email||'')}">
+      <label class="req" for="login-pass">${t('login_password')}</label>
+      <input type="password" id="login-pass" autocomplete="current-password" dir="ltr">
+      <div class="login-err" id="loginErr">${err ? escHtml(describeLoginError(err)) : ''}</div>
+      <button class="btn btn-primary" type="submit" id="loginBtn">${t('login_btn')}</button>
+    </form>
+    <div class="hint" style="margin-top:12px;">${t('login_hint')}</div>
+  </div>`;
+  const form = document.getElementById('loginForm');
+  if(form && form.addEventListener) form.addEventListener('submit', async ev=>{
+    ev.preventDefault();
+    const em = document.getElementById('login-email').value.trim();
+    const pw = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('loginErr');
+    if(!em || !pw){ errEl.textContent = t('login_need_both'); return; }
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.textContent = t('login_busy');
+    try{
+      await auth.signInWithEmailAndPassword(em, pw);
+      // onAuthStateChanged takes it from here.
+      document.getElementById('app').innerHTML = `<div class="empty"><div class="em-ic">⏳</div>${t('connecting')}</div>`;
+    }catch(e){
+      console.warn('sign-in failed', e && e.code);
+      showLoginScreen(e, em);
+    }
+  });
+}
+
+// Drop Firestore's on-device copy (IndexedDB) so the next person on a shared
+// phone cannot read the previous user's data. The instance is unusable after
+// terminate(), so callers reload the page afterwards.
+async function wipeLocalData(){
+  try{ await db.terminate(); }catch(e){ console.warn('terminate failed', e); }
+  try{ await db.clearPersistence(); }catch(e){ console.warn('clearPersistence failed', e); }
+}
+
+async function signOutUser(){
+  // Give unsent changes a moment to reach the server; wiping the cache drops them.
+  let synced = true;
+  try{
+    synced = await Promise.race([
+      db.waitForPendingWrites().then(()=>true),
+      new Promise(r=>setTimeout(()=>r(false), 4000)),
+    ]);
+  }catch(e){ synced = true; }
+  if(!synced && !confirm(t('signout_unsynced'))) return;
+  await wipeLocalData();
+  try{ await auth.signOut(); }catch(e){ console.warn('signOut failed', e); }
+  location.reload();
 }
 
 const GENERATORS_COLLECTION = 'generators';
@@ -723,6 +825,18 @@ const I18N = {
     save_reading:'💾 حفظ القراءة', saving:'جارٍ الحفظ...', retry_save:'🔄 إعادة المحاولة',
     saved:'✅ تم حفظ القراءة', saved_flags:'✅ تم الحفظ — ⚠️ {n} خارج النطاق',
     save_queued:'⚠️ سيتم المزامنة عند الاتصال. اضغط إعادة المحاولة إذا تكرر.',
+    save_denied:'⛔ لم يتم الحفظ — تم رفض الوصول. لم تُحفظ القراءة ولن تتم مزامنتها. سجّل الدخول مرة أخرى ثم اضغط إعادة المحاولة.',
+    save_failed_code:'⛔ لم يتم الحفظ ({code}). اضغط إعادة المحاولة.',
+    login_title:'تسجيل الدخول', login_sub:'ادخل بحسابك للمتابعة',
+    login_email:'البريد الإلكتروني', login_password:'كلمة المرور', login_btn:'دخول', login_busy:'جارٍ الدخول...',
+    login_bad_creds:'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+    login_too_many:'محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.',
+    login_network:'لا يوجد اتصال بالإنترنت. تحقق من الاتصال ثم حاول مرة أخرى.',
+    login_failed:'تعذّر تسجيل الدخول.', login_need_both:'أدخل البريد الإلكتروني وكلمة المرور.',
+    login_hint:'الحسابات يُنشئها المسؤول. إذا نسيت كلمة المرور تواصل معه.',
+    account:'الحساب', signed_in_as:'مسجّل الدخول باسم:', signout:'تسجيل الخروج',
+    signout_hint:'تسجيل الخروج يمسح البيانات المحفوظة على هذا الهاتف، حتى لا يراها الشخص التالي.',
+    signout_unsynced:'بعض التغييرات لم تصل إلى الخادم بعد. تسجيل الخروج الآن سيحذفها. هل تريد المتابعة؟',
     warn_tech:'⚠️ أدخل اسم الفني', warn_datetime:'⚠️ حدّد التاريخ والوقت', warn_hours:'⚠️ أدخل ساعات التشغيل',
     all:'الكل', reading_count:'{n} قراءة', export_csv:'⬇ تصدير CSV', by:'بواسطة',
     hours:'ساعات', voltage_l1:'الجهد L1', coolant_c:'المبرّد °م', battery_v:'البطارية فولت', fuel_pct:'الوقود %', load_kw:'الحِمل ك.و',
@@ -754,9 +868,9 @@ const I18N = {
     removed:'🗑️ تمت إزالة المولد', remove_fail:'⚠️ تعذّرت الإزالة — تحقق من الاتصال',
     warn_genname:'⚠️ أدخل اسم المولد', del_confirm:'حذف هذه القراءة؟ لا يمكن التراجع.',
     client_other:'أخرى',
-    err_perm:'رُفض الوصول بواسطة قواعد أمان Firestore. في وحدة تحكم Firebase ← Firestore ← القواعد، تأكد من نشر القواعد والسماح بالوصول عند request.auth != null.',
+    err_perm:'رُفض الوصول بواسطة قواعد أمان Firestore. هذا الحساب غير مسموح له بالوصول إلى البيانات — سجّل الخروج من الإعداد ثم ادخل بحساب معتمد، أو تواصل مع المسؤول.',
     err_net:'تعذّر الوصول إلى الشبكة. تحقق من اتصالك بالإنترنت وحاول مجددًا.',
-    err_auth:'تسجيل الدخول المجهول غير مُفعّل. في Firebase ← Authentication ← طريقة الدخول، فعّل Anonymous.',
+    err_auth:'الدخول بالبريد الإلكتروني وكلمة المرور غير مُفعّل. في Firebase ← Authentication ← طريقة الدخول، فعّل Email/Password.',
     err_db:'يبدو أن قاعدة بيانات Firestore لم تُنشأ بعد. في Firebase ← Firestore، اضغط إنشاء قاعدة بيانات.',
     err_generic:'شيء ما يمنع الاتصال. تأكد من: إنشاء Firestore، تفعيل الدخول المجهول، ونشر القواعد.',
     company_line:'البيئة · السلامة · الهندسة',
@@ -959,6 +1073,18 @@ const I18N = {
     save_reading:'💾 Save Reading', saving:'Saving...', retry_save:'🔄 Retry save',
     saved:'✅ Reading saved', saved_flags:'✅ Saved — ⚠️ {n} out of range',
     save_queued:'⚠️ Save queued — will sync once connected. Tap Retry if this repeats.',
+    save_denied:'⛔ Not saved — access denied. This reading was NOT stored and will not sync. Sign in again, then tap Retry.',
+    save_failed_code:'⛔ Not saved ({code}). Tap Retry.',
+    login_title:'Sign in', login_sub:'Sign in with your account to continue',
+    login_email:'Email', login_password:'Password', login_btn:'Sign in', login_busy:'Signing in...',
+    login_bad_creds:'Incorrect email or password.',
+    login_too_many:'Too many attempts. Wait a little and try again.',
+    login_network:'No internet connection. Check the connection and try again.',
+    login_failed:'Could not sign in.', login_need_both:'Enter your email and password.',
+    login_hint:'Accounts are created by the administrator. If you forgot your password, contact them.',
+    account:'Account', signed_in_as:'Signed in as:', signout:'Sign out',
+    signout_hint:'Signing out wipes the data stored on this phone, so the next person cannot see it.',
+    signout_unsynced:'Some changes have not reached the server yet. Signing out now will delete them. Continue?',
     warn_tech:'⚠️ Enter technician name', warn_datetime:'⚠️ Set date & time', warn_hours:'⚠️ Enter running hours',
     all:'All', reading_count:'{n} reading(s)', export_csv:'⬇ Export CSV', by:'By',
     hours:'Hours', voltage_l1:'Voltage L1', coolant_c:'Coolant °C', battery_v:'Battery V', fuel_pct:'Fuel %', load_kw:'Load kW',
@@ -990,9 +1116,9 @@ const I18N = {
     removed:'🗑️ Generator removed', remove_fail:'⚠️ Could not remove — check connection and try again',
     warn_genname:'⚠️ Enter a generator name', del_confirm:'Delete this reading? This cannot be undone.',
     client_other:'Other',
-    err_perm:'Access denied by Firestore security rules. In Firebase Console → Firestore Database → Rules, make sure the rules are published (not just typed in) and allow access when request.auth != null.',
+    err_perm:'Access denied by Firestore security rules. This account is not allowed to read the data — sign out from Setup and sign in with an authorised account, or contact the administrator.',
     err_net:'Can\u2019t reach the network. Check your internet connection and try again.',
-    err_auth:'Anonymous sign-in isn\u2019t enabled yet. In Firebase Console → Authentication → Sign-in method, enable Anonymous.',
+    err_auth:'Email/password sign-in isn\u2019t enabled. In Firebase Console → Authentication → Sign-in method, enable Email/Password.',
     err_db:'Firestore database doesn\u2019t seem to be created yet. In Firebase Console → Firestore Database, click Create database.',
     err_generic:'Something\u2019s blocking the connection. Double-check: Firestore is created, Anonymous sign-in is enabled, and security rules are published.',
     company_line:'Environmental · Safety · Engineering',
@@ -1006,6 +1132,9 @@ function setLang(lang){
   try{ localStorage.setItem('es-lang', lang); }catch(e){}
   STATE.lang = lang;
   applyLangChrome();
+  // On the login screen, redraw it in the new language (keeping the typed email).
+  const lf = document.getElementById('loginForm');
+  if(lf && !CURRENT_USER){ const em = document.getElementById('login-email'); showLoginScreen(null, em ? em.value : ''); return; }
   render();
 }
 function t(key, vars){
@@ -1485,10 +1614,23 @@ async function bindNewForm(){
         render();
       }catch(e){
         console.warn('save failed', e);
-        showToast(t('save_queued'));
+        const code = (e && e.code) || '';
         saveBtn.disabled = false;
-        saveBtn.textContent = t('retry_save');
-        saveBtn.onclick = doSave;
+        if(code === 'permission-denied' || code === 'unauthenticated'){
+          // The server refused the write and Firestore discarded it — nothing is
+          // queued. Never tell the technician it will sync.
+          showToast(t('save_denied'));
+          saveBtn.textContent = t('retry_save');
+          saveBtn.onclick = doSave;
+        }else if(code === 'unavailable' || code === 'deadline-exceeded'){
+          showToast(t('save_queued'));
+          saveBtn.textContent = t('retry_save');
+          saveBtn.onclick = doSave;
+        }else{
+          showToast(t('save_failed_code', {code: code || '?'}));
+          saveBtn.textContent = t('retry_save');
+          saveBtn.onclick = doSave;
+        }
       }
     };
     await doSave();
@@ -5565,6 +5707,14 @@ function renderGenerators(){
 
   return `
   <div class="card">
+    <h3>${t('account')}</h3>
+    <div class="signout-row">
+      <div class="who">${t('signed_in_as')} <b dir="ltr">${escHtml((CURRENT_USER && CURRENT_USER.email) || '')}</b></div>
+      <button class="btn btn-danger btn-sm" id="signOutBtn">${t('signout')}</button>
+    </div>
+    <div class="hint" style="margin-top:8px;">${t('signout_hint')}</div>
+  </div>
+  <div class="card">
     <h3>${t('your_gens',{n:STATE.generators.length})}</h3>
     ${rows || `<div class="hint">${t('no_gens')}</div>`}
   </div>
@@ -5607,6 +5757,8 @@ function renderGenerators(){
 }
 
 function bindGenerators(){
+  const so = document.getElementById('signOutBtn');
+  if(so) so.addEventListener('click', ()=>{ so.disabled = true; signOutUser().finally(()=>{ so.disabled = false; }); });
   bindLabelsEditor();
   bindCustomFieldsEditor();
   bindPriceListEditor();

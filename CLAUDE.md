@@ -7,7 +7,8 @@ A bilingual (Arabic-default / English) web app for **EnvironmSafe — Engineerin
 
 ## WHAT — the app
 - **Single file:** `generator-readings.html` (~185 KB). Everything — HTML, CSS, JS — is inline in that one file. There is no build step.
-- **Backend:** Firebase Firestore (anonymous auth, offline persistence, real-time multi-device sync).
+- **Backend:** Firebase Firestore (email/password auth, offline persistence, real-time multi-device sync).
+- **Auth (Sept 2026):** anonymous sign-in was a security hole (anyone could mint a token and read/write everything) and is gone. `authReady()` shows a bilingual email/password login screen (`showLoginScreen()`); wrong email and wrong password deliberately give the same message. A leftover anonymous session is signed out and its cache wiped. **Setup → Account → Sign out** (`signOutUser()`) calls `db.terminate()` then `db.clearPersistence()` so the next person on a shared phone cannot read the previous user's cached data, then reloads. Accounts are created by the admin in Firebase Console → Authentication. The rules reject `sign_in_provider == 'anonymous'` and deny everything not listed. A reading save refused with `permission-denied` must say "not saved", never "queued".
 - **Hosting:** Netlify (drag-and-drop deploy of the single HTML file as `index.html`).
 - **Libraries** (all via CDN, no npm): Chart.js, Firebase 10.14.1 compat SDKs, SheetJS (xlsx) 0.18.5.
 

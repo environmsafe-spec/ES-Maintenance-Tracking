@@ -1,0 +1,19 @@
+{
+  "generator": "FAO Genset 1",
+  "date": "2026-09-12",
+  "type": "repair",
+  "severity": "high",
+  "status": "closed",
+  "hoursAtEvent": 6975,
+  "shortDescription": "Fuel injection pump failure – removed, overhauled at workshop and reinstalled",
+  "description": "The generator had a fault in the fuel injection pump, which affected fuel delivery to the engine. The pump was removed and sent to an external specialist workshop, where it was opened, inspected, and the worn or failed internal parts were replaced with a repair kit. The pump was then brought back to site, reinstalled and commissioned. The generator is now running normally.",
+  "causesOfFault": "The exact cause was not confirmed. Probable causes:\n- Normal internal wear of pump parts (shoes, liners, rotor) after long running hours.\n- Contaminated fuel (dirt or water) wearing the internal parts faster.\n- Blocked or overdue fuel filters, starving the pump of fuel.\n- Air in the fuel system, causing the pump to run dry.",
+  "actionTaken": "1. Removed the fuel injection pump from the engine.\n2. Took the pump to an external specialist workshop.\n3. Opened and inspected the pump, and replaced the failed parts with a repair kit.\n4. Brought the pump back to site and reinstalled it.\n5. Bled the fuel system, commissioned the generator and tested it on load. The generator is working well.",
+  "partsUsed": "Fuel injection pump repair kit (DPS/DPA parts, shoes, liners, seals, etc.)",
+  "partsLines": [
+    { "name": "Fuel injection pump repair kit (DPS/DPA parts, shoes, liners, seals, etc.)", "qty": 1, "unitPrice": 127 }
+  ],
+  "downtimeHrs": null,
+  "by": "",
+  "recommendations": "- Replace the fuel filters and drain water from the water separator at every scheduled service.\n- Check the fuel tank for water and sediment, and clean it if needed.\n- Use clean, filtered fuel only.\n- Watch starting and power output for the next 250 running hours."
+}

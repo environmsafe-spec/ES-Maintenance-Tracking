@@ -61,13 +61,9 @@ const ITEMS = [
   ['Speed Potentiometer',                          'مقاومة ضبط السرعة',               'each', 51.75],
 ];
 
-async function signIn(){
-  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({returnSecureToken:true})
-  });
-  if(!r.ok) throw new Error('anonymous sign-in failed: ' + r.status + ' ' + await r.text());
-  return (await r.json()).idToken;
-}
+// Signs in as the email/password account in ES_FIREBASE_EMAIL / ES_FIREBASE_PASSWORD
+// (anonymous tokens are rejected by the rules). See firebase_rest.js.
+const { signIn } = require('./firebase_rest');
 
 const val = v => {
   if(v === null || v === undefined) return { nullValue: null };

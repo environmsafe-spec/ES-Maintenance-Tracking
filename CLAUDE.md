@@ -77,6 +77,8 @@ Money: always go through `round2()` / `moneyNum()` / `money()`; never print a ra
 
 **Backward compatibility is a hard requirement here.** Faults saved before billing existed have no `serviceFee` and no `partsLines`; they must keep working and fall back to the configured rate. `test_billing.js` has an "Existing records keep working" section — keep it passing.
 
+**Command-line tools** sign in through `firebase_rest.js` as the email/password account in the `ES_FIREBASE_EMAIL` / `ES_FIREBASE_PASSWORD` environment variables (set in the Claude Code environment settings — never in the repo or the chat). `add_corrective.js records/<file>.json` (dry run) / `--commit` adds one corrective record in exactly the shape the app's form saves, with the next `Cor-…` ID, and refuses duplicates (same generator + date + short description). Record files live in `records/`.
+
 `seed_pricelist.js` loads the 39-item catalogue from the FAO financial proposal into `pricelist` (idempotent, matched on English name; `--update` also corrects prices). It needs the published rules.
 
 ## HOW — conventions you MUST follow
